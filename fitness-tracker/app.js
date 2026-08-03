@@ -95,6 +95,16 @@ function defaultState() {
           { id: uid(), label: 'Band-assisted muscle-up', done: false, doneDate: null }
         ],
         entries: []
+      },
+      {
+        id: uid(),
+        type: 'metric',
+        name: 'Push-ups',
+        unit: ' reps',
+        direction: 'increase',
+        target: 50,
+        createdAt: now,
+        entries: []
       }
     ]
   };

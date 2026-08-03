@@ -21,8 +21,9 @@ from inside `fitness-tracker/`.
 
 - **Goals come in two types:**
   - **Metric goals** — a number to hit, with a direction (go up or down to a
-    target). Body Fat % (target 10%) is seeded by default. Use this type for
-    anything numeric: weight, a lift number, a race time, rep maxes, etc.
+    target). Body Fat % (target 10%) and Push-ups (target 50 reps) are seeded
+    by default. Use this type for anything numeric: weight, a lift number, a
+    race time, rep maxes, etc.
   - **Skill goals** — a milestone checklist plus a practice-session log, for
     feats that aren't a single number. Muscle-Up is seeded by default with a
     standard calisthenics progression (pull-up/dip strength, false-grip hang,
