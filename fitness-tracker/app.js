@@ -67,6 +67,7 @@ function resizeImageToDataUrl(file, maxDim, quality) {
 function defaultState() {
   const now = new Date().toISOString();
   return {
+    seededPushups: true,
     goals: [
       {
         id: uid(),
@@ -116,6 +117,19 @@ function loadState() {
     if (!raw) return defaultState();
     const parsed = JSON.parse(raw);
     if (!parsed || !Array.isArray(parsed.goals)) return defaultState();
+    if (!parsed.seededPushups) {
+      parsed.goals.push({
+        id: uid(),
+        type: 'metric',
+        name: 'Push-ups',
+        unit: ' reps',
+        direction: 'increase',
+        target: 50,
+        createdAt: new Date().toISOString(),
+        entries: []
+      });
+      parsed.seededPushups = true;
+    }
     return parsed;
   } catch (e) {
     console.error('Failed to load saved data, starting fresh.', e);
