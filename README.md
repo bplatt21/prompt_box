@@ -33,6 +33,10 @@ from inside `fitness-tracker/`.
   forward.
 - Each metric goal gets a trend chart (hover for a tooltip) plotted against
   its target, plus a full history table.
+- When logging a measurement for a metric goal, you can optionally attach a
+  screenshot (e.g. a scale or scan reading) — it's resized and compressed in
+  the browser before saving, and shows as a thumbnail in the history table
+  that opens full-size on click.
 - **Data lives in the browser's localStorage only** — nothing is sent
   anywhere. Use "Export data" / "Import data" on the dashboard to back up or
   move data between browsers/devices.

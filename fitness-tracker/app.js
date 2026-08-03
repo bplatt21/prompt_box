@@ -32,6 +32,36 @@ function round1(n) {
   return Math.round(n * 10) / 10;
 }
 
+function resizeImageToDataUrl(file, maxDim, quality) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error);
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Could not read image file.'));
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          if (width >= height) {
+            height = Math.round(height * (maxDim / width));
+            width = maxDim;
+          } else {
+            width = Math.round(width * (maxDim / height));
+            height = maxDim;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 /* ---------- data / persistence ---------- */
 
 function defaultState() {
@@ -88,7 +118,7 @@ function saveState() {
 }
 
 let state = loadState();
-let ui = { view: 'dashboard', goalId: null, modal: null, modalGoalId: null };
+let ui = { view: 'dashboard', goalId: null, modal: null, modalGoalId: null, lightboxImage: null };
 
 /* ---------- domain logic ---------- */
 
@@ -362,11 +392,12 @@ function renderMetricDetail(goal) {
       <td>${escapeHtml(formatDateLabel(e.date))}</td>
       <td>${e.value}${unit}</td>
       <td>${escapeHtml(e.note || '')}</td>
+      <td>${e.image ? `<button class="thumb-btn" type="button" data-action="view-image" data-goal-id="${goal.id}" data-entry-id="${e.id}" aria-label="View screenshot"><img src="${e.image}" class="thumb-img" alt="" /></button>` : ''}</td>
       <td><button class="btn-icon" type="button" data-action="delete-entry" data-goal-id="${goal.id}" data-entry-id="${e.id}" aria-label="Delete entry">&times;</button></td>
     </tr>`).join('');
 
   const table = entries.length
-    ? `<table class="data-table"><thead><tr><th>Date</th><th>Value</th><th>Note</th><th></th></tr></thead><tbody>${rows}</tbody></table>`
+    ? `<table class="data-table"><thead><tr><th>Date</th><th>Value</th><th>Note</th><th></th><th></th></tr></thead><tbody>${rows}</tbody></table>`
     : '<p class="empty-state">No entries yet.</p>';
 
   return `
@@ -526,6 +557,9 @@ function renderLogEntryModal() {
       <label>Value (${escapeHtml(goal.unit || 'unit')})
         <input type="number" name="value" step="any" required />
       </label>
+      <label>Screenshot (optional)
+        <input type="file" name="image" accept="image/*" />
+      </label>
       <label>Note (optional)
         <input type="text" name="note" maxlength="140" placeholder="How'd it go?" />
       </label>
@@ -606,6 +640,14 @@ function renderModal() {
   </div>`;
 }
 
+function renderLightbox() {
+  if (!ui.lightboxImage) return '';
+  return `
+  <div class="lightbox-overlay" tabindex="-1">
+    <img src="${ui.lightboxImage}" class="lightbox-img" alt="Screenshot" />
+  </div>`;
+}
+
 /* ---------- main render ---------- */
 
 function render() {
@@ -618,13 +660,16 @@ function render() {
   }
   mainHtml = goal ? renderGoalDetail(goal) : renderDashboard();
 
-  app.innerHTML = `<div class="app-shell">${mainHtml}</div>${renderModal()}`;
+  app.innerHTML = `<div class="app-shell">${mainHtml}</div>${renderModal()}${renderLightbox()}`;
 
   wireCharts();
   wireAddGoalTypeToggle();
 
   const modalFirstField = document.querySelector('.modal input, .modal select, .modal textarea');
   if (modalFirstField) modalFirstField.focus();
+
+  const lightboxEl = document.querySelector('.lightbox-overlay');
+  if (lightboxEl) lightboxEl.focus();
 }
 
 function wireAddGoalTypeToggle() {
@@ -643,6 +688,7 @@ function wireAddGoalTypeToggle() {
 function closeModal() {
   ui.modal = null;
   ui.modalGoalId = null;
+  ui.lightboxImage = null;
   render();
 }
 
@@ -690,15 +736,21 @@ function handleAddGoal(data) {
   render();
 }
 
-function handleLogMetricEntry(goalId, data) {
+function handleLogMetricEntry(goalId, data, image) {
   const goal = state.goals.find(g => g.id === goalId);
   if (!goal) return;
   const value = parseFloat(data.get('value'));
   if (isNaN(value)) return;
   const date = data.get('date') || todayStr();
   goal.entries = goal.entries.filter(e => e.date !== date);
-  goal.entries.push({ id: uid(), date, value, note: (data.get('note') || '').trim() });
-  saveState();
+  goal.entries.push({ id: uid(), date, value, note: (data.get('note') || '').trim(), image: image || null });
+  try {
+    saveState();
+  } catch (err) {
+    goal.entries[goal.entries.length - 1].image = null;
+    saveState();
+    alert('Entry saved, but the screenshot was too large for local storage and was not kept.');
+  }
   ui.modal = null;
   ui.modalGoalId = null;
   render();
@@ -828,7 +880,7 @@ function handleImportFile(file) {
       if (!confirm('Import this file? It will replace all current data.')) return;
       state = parsed;
       saveState();
-      ui = { view: 'dashboard', goalId: null, modal: null, modalGoalId: null };
+      ui = { view: 'dashboard', goalId: null, modal: null, modalGoalId: null, lightboxImage: null };
       render();
     } catch (err) {
       alert('Could not import that file: ' + err.message);
@@ -841,14 +893,14 @@ function handleResetData() {
   if (!confirm('This will erase all goals and history and restore the defaults. Continue?')) return;
   state = defaultState();
   saveState();
-  ui = { view: 'dashboard', goalId: null, modal: null, modalGoalId: null };
+  ui = { view: 'dashboard', goalId: null, modal: null, modalGoalId: null, lightboxImage: null };
   render();
 }
 
 /* ---------- event delegation ---------- */
 
 function onAppClick(e) {
-  if (e.target.classList && e.target.classList.contains('modal-overlay')) {
+  if (e.target.classList && (e.target.classList.contains('modal-overlay') || e.target.classList.contains('lightbox-overlay'))) {
     closeModal();
     return;
   }
@@ -874,6 +926,12 @@ function onAppClick(e) {
       handleDeleteGoal(goalId); break;
     case 'delete-entry':
       handleDeleteEntry(goalId, actionEl.dataset.entryId); break;
+    case 'view-image': {
+      const g = state.goals.find(g => g.id === goalId);
+      const entry = g && g.entries.find(en => en.id === actionEl.dataset.entryId);
+      if (entry && entry.image) { ui.lightboxImage = entry.image; render(); }
+      break;
+    }
     case 'toggle-milestone':
       handleToggleMilestone(goalId, actionEl.dataset.milestoneId); break;
     case 'delete-milestone':
@@ -892,7 +950,7 @@ function onAppClick(e) {
 }
 
 function onAppKeydown(e) {
-  if (e.key === 'Escape' && ui.modal) {
+  if (e.key === 'Escape' && (ui.modal || ui.lightboxImage)) {
     closeModal();
     return;
   }
@@ -902,7 +960,7 @@ function onAppKeydown(e) {
   }
 }
 
-function onAppSubmit(e) {
+async function onAppSubmit(e) {
   const form = e.target.closest('form');
   if (!form) return;
   e.preventDefault();
@@ -910,7 +968,19 @@ function onAppSubmit(e) {
   const data = new FormData(form);
   switch (formType) {
     case 'add-goal': handleAddGoal(data); break;
-    case 'log-metric-entry': handleLogMetricEntry(form.dataset.goalId, data); break;
+    case 'log-metric-entry': {
+      const file = data.get('image');
+      let image = null;
+      if (file && file.size > 0) {
+        try {
+          image = await resizeImageToDataUrl(file, 900, 0.8);
+        } catch (err) {
+          console.error('Failed to process screenshot', err);
+        }
+      }
+      handleLogMetricEntry(form.dataset.goalId, data, image);
+      break;
+    }
     case 'log-skill-entry': handleLogSkillEntry(form.dataset.goalId, data); break;
     case 'add-milestone': handleAddMilestone(form.dataset.goalId, data); break;
     case 'edit-goal': handleEditGoal(form.dataset.goalId, data); break;

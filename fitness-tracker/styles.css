@@ -604,6 +604,47 @@ form textarea {
   margin-bottom: 0;
 }
 
+/* ---------- thumbnails / lightbox ---------- */
+
+.thumb-btn {
+  appearance: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0;
+  background: none;
+  cursor: zoom-in;
+  display: block;
+  width: 36px;
+  height: 36px;
+  overflow: hidden;
+}
+
+.thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(11, 11, 11, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 200;
+  cursor: zoom-out;
+}
+
+.lightbox-img {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
 /* ---------- modal ---------- */
 
 .modal-overlay {
