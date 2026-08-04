@@ -514,6 +514,11 @@ button, input, select, textarea {
 
 /* ---------- tables ---------- */
 
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 .data-table {
   width: 100%;
   border-collapse: collapse;
@@ -810,5 +815,19 @@ form textarea {
 
   .card {
     padding: 16px;
+  }
+
+  .detail-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .btn-icon {
+    padding: 10px;
+    font-size: 20px;
+  }
+
+  .thumb-btn {
+    width: 44px;
+    height: 44px;
   }
 }

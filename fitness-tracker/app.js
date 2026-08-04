@@ -566,7 +566,7 @@ function renderMetricDetail(goal) {
     </tr>`).join('');
 
   const table = entries.length
-    ? `<table class="data-table"><thead><tr><th>Date</th><th>Value</th>${hasBreakdown ? '<th>Breakdown</th>' : ''}<th>Note</th><th></th><th></th><th></th></tr></thead><tbody>${rows}</tbody></table>`
+    ? `<div class="table-scroll"><table class="data-table"><thead><tr><th>Date</th><th>Value</th>${hasBreakdown ? '<th>Breakdown</th>' : ''}<th>Note</th><th></th><th></th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
     : '<p class="empty-state">No entries yet.</p>';
 
   return `
@@ -626,7 +626,7 @@ function renderSkillDetail(goal) {
   }).join('');
 
   const table = entries.length
-    ? `<table class="data-table"><thead><tr><th>Date</th><th>Value</th>${hasBreakdown ? '<th>Breakdown</th>' : ''}<th>Note</th><th></th><th></th></tr></thead><tbody>${rows}</tbody></table>`
+    ? `<div class="table-scroll"><table class="data-table"><thead><tr><th>Date</th><th>Value</th>${hasBreakdown ? '<th>Breakdown</th>' : ''}<th>Note</th><th></th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
     : '<p class="empty-state">No sessions logged yet.</p>';
 
   const achievedBanner = goal.achieved ? `
@@ -741,7 +741,7 @@ function renderBmiSection() {
   }).join('');
 
   const table = entries.length
-    ? `<table class="data-table"><thead><tr><th>Date</th><th>Body Fat %</th><th>Weight</th><th>BMI</th><th>Note</th><th></th><th></th><th></th></tr></thead><tbody>${rows}</tbody></table>`
+    ? `<div class="table-scroll"><table class="data-table"><thead><tr><th>Date</th><th>Body Fat %</th><th>Weight</th><th>BMI</th><th>Note</th><th></th><th></th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
     : '<p class="empty-state">No entries yet.</p>';
 
   return `
@@ -808,7 +808,7 @@ function renderFoodSection() {
     </tr>`).join('');
 
   const table = entries.length
-    ? `<table class="data-table"><thead><tr><th>Date</th><th>Food</th><th>Calories</th><th>Protein</th><th>Carbs</th><th>Fat</th><th>Creatine</th><th></th><th></th><th></th></tr></thead><tbody>${rows}</tbody></table>`
+    ? `<div class="table-scroll"><table class="data-table"><thead><tr><th>Date</th><th>Food</th><th>Calories</th><th>Protein</th><th>Carbs</th><th>Fat</th><th>Creatine</th><th></th><th></th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
     : '<p class="empty-state">No food logged yet.</p>';
 
   return `
