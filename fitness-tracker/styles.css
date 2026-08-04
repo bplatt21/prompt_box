@@ -185,6 +185,11 @@ button, input, select, textarea {
   outline-offset: 1px;
 }
 
+.btn-icon-edit:hover {
+  color: var(--accent);
+  background: var(--accent-track);
+}
+
 /* ---------- goal grid / cards ---------- */
 
 .goal-grid {
@@ -496,7 +501,8 @@ button, input, select, textarea {
   border-bottom: none;
 }
 
-.data-table td:last-child {
+.data-table td:last-child,
+.data-table td:nth-last-child(2) {
   text-align: right;
   width: 1%;
 }
@@ -625,6 +631,40 @@ form textarea {
   padding: 12px 14px;
   margin-bottom: 10px;
   word-break: break-all;
+}
+
+.edit-image-current {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: -6px 0 14px;
+}
+
+.edit-image-preview {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.checkbox-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.checkbox-row input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  accent-color: var(--accent);
 }
 
 /* ---------- thumbnails / lightbox ---------- */

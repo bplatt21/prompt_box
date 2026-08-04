@@ -18,6 +18,8 @@ function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
+const EDIT_ICON_SVG = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M11.5 2.5l2 2-7.5 7.5H4v-2l7.5-7.5z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"/></svg>';
+
 function formatDateLabel(dateStr) {
   const d = new Date(dateStr + 'T00:00:00');
   if (isNaN(d)) return dateStr;
@@ -196,7 +198,7 @@ async function pullSync(code) {
 }
 
 let state = loadState();
-let ui = { view: 'dashboard', goalId: null, modal: null, modalGoalId: null, lightboxImage: null };
+let ui = { view: 'dashboard', goalId: null, modal: null, modalGoalId: null, modalEntryId: null, lightboxImage: null };
 
 /* ---------- domain logic ---------- */
 
@@ -495,11 +497,12 @@ function renderMetricDetail(goal) {
       ${hasBreakdown ? `<td>${Array.isArray(e.values) && e.values.length > 1 ? escapeHtml(e.values.join(' + ')) : ''}</td>` : ''}
       <td>${escapeHtml(e.note || '')}</td>
       <td>${e.image ? `<button class="thumb-btn" type="button" data-action="view-image" data-goal-id="${goal.id}" data-entry-id="${e.id}" aria-label="View screenshot"><img src="${e.image}" class="thumb-img" alt="" /></button>` : ''}</td>
+      <td><button class="btn-icon btn-icon-edit" type="button" data-action="open-log-entry" data-goal-id="${goal.id}" data-entry-id="${e.id}" aria-label="Edit entry">${EDIT_ICON_SVG}</button></td>
       <td><button class="btn-icon" type="button" data-action="delete-entry" data-goal-id="${goal.id}" data-entry-id="${e.id}" aria-label="Delete entry">&times;</button></td>
     </tr>`).join('');
 
   const table = entries.length
-    ? `<table class="data-table"><thead><tr><th>Date</th><th>Value</th>${hasBreakdown ? '<th>Breakdown</th>' : ''}<th>Note</th><th></th><th></th></tr></thead><tbody>${rows}</tbody></table>`
+    ? `<table class="data-table"><thead><tr><th>Date</th><th>Value</th>${hasBreakdown ? '<th>Breakdown</th>' : ''}<th>Note</th><th></th><th></th><th></th></tr></thead><tbody>${rows}</tbody></table>`
     : '<p class="empty-state">No entries yet.</p>';
 
   return `
@@ -536,11 +539,12 @@ function renderSkillDetail(goal) {
       <td>${escapeHtml(formatDateLabel(e.date))}</td>
       <td>${e.successes}/${e.attempts}</td>
       <td>${escapeHtml(e.note || '')}</td>
+      <td><button class="btn-icon btn-icon-edit" type="button" data-action="open-log-entry" data-goal-id="${goal.id}" data-entry-id="${e.id}" aria-label="Edit entry">${EDIT_ICON_SVG}</button></td>
       <td><button class="btn-icon" type="button" data-action="delete-entry" data-goal-id="${goal.id}" data-entry-id="${e.id}" aria-label="Delete entry">&times;</button></td>
     </tr>`).join('');
 
   const table = entries.length
-    ? `<table class="data-table"><thead><tr><th>Date</th><th>Success / Attempts</th><th>Note</th><th></th></tr></thead><tbody>${rows}</tbody></table>`
+    ? `<table class="data-table"><thead><tr><th>Date</th><th>Success / Attempts</th><th>Note</th><th></th><th></th></tr></thead><tbody>${rows}</tbody></table>`
     : '<p class="empty-state">No sessions logged yet.</p>';
 
   const achievedBanner = goal.achieved ? `
@@ -648,53 +652,69 @@ function renderAddGoalModal() {
 function renderLogEntryModal() {
   const goal = state.goals.find(g => g.id === ui.modalGoalId);
   if (!goal) return '';
+  const editEntry = ui.modalEntryId ? goal.entries.find(e => e.id === ui.modalEntryId) : null;
+
   if (goal.type === 'metric') {
+    const editValues = editEntry
+      ? (Array.isArray(editEntry.values) && editEntry.values.length ? editEntry.values : [editEntry.value])
+      : [];
+    const extraValueRows = editValues.slice(1).map(v => `
+      <div class="inline-form value-field-row">
+        <input type="number" name="value" step="any" value="${v}" />
+        <button type="button" class="btn-icon" data-action="remove-value-field" aria-label="Remove value">&times;</button>
+      </div>`).join('');
     return `
-    <form data-form="log-metric-entry" data-goal-id="${goal.id}">
-      <h2>Log a measurement</h2>
+    <form data-form="log-metric-entry" data-goal-id="${goal.id}" ${editEntry ? `data-entry-id="${editEntry.id}"` : ''}>
+      <h2>${editEntry ? 'Edit measurement' : 'Log a measurement'}</h2>
       <p class="modal-subtitle">${escapeHtml(goal.name)}</p>
       <label>Date
-        <input type="date" name="date" value="${todayStr()}" max="${todayStr()}" required />
+        <input type="date" name="date" value="${editEntry ? editEntry.date : todayStr()}" max="${todayStr()}" required />
       </label>
       <label>Value (${escapeHtml((goal.unit || 'unit').trim())})
-        <input type="number" name="value" step="any" required />
+        <input type="number" name="value" step="any" value="${editValues.length ? editValues[0] : ''}" required />
       </label>
-      <div class="value-fields-wrap"></div>
+      <div class="value-fields-wrap">${extraValueRows}</div>
       <button type="button" class="btn btn-ghost btn-sm add-value-btn" data-action="add-value-field">+ Add another value</button>
       <p class="field-hint">Add one value per attempt/set — the highest one becomes this entry's value.</p>
-      <label>Screenshot (optional)
+      <label>Screenshot ${editEntry && editEntry.image ? '' : '(optional)'}
         <input type="file" name="image" accept="image/*" />
       </label>
+      ${editEntry && editEntry.image ? `
+      <div class="edit-image-current">
+        <img src="${editEntry.image}" alt="Current screenshot" class="edit-image-preview" />
+        <label class="checkbox-row"><input type="checkbox" name="removeImage" /> Remove screenshot</label>
+      </div>` : ''}
       <label>Note (optional)
-        <input type="text" name="note" maxlength="140" placeholder="How'd it go?" />
+        <input type="text" name="note" maxlength="140" value="${escapeHtml(editEntry ? (editEntry.note || '') : '')}" placeholder="How'd it go?" />
       </label>
       <div class="modal-actions">
         <button type="button" class="btn btn-ghost" data-action="close-modal">Cancel</button>
-        <button type="submit" class="btn btn-primary">Save</button>
+        <button type="submit" class="btn btn-primary">${editEntry ? 'Save changes' : 'Save'}</button>
       </div>
     </form>`;
   }
+
   return `
-  <form data-form="log-skill-entry" data-goal-id="${goal.id}">
-    <h2>Log a practice session</h2>
+  <form data-form="log-skill-entry" data-goal-id="${goal.id}" ${editEntry ? `data-entry-id="${editEntry.id}"` : ''}>
+    <h2>${editEntry ? 'Edit practice session' : 'Log a practice session'}</h2>
     <p class="modal-subtitle">${escapeHtml(goal.name)}</p>
     <label>Date
-      <input type="date" name="date" value="${todayStr()}" max="${todayStr()}" required />
+      <input type="date" name="date" value="${editEntry ? editEntry.date : todayStr()}" max="${todayStr()}" required />
     </label>
     <div class="form-row">
       <label>Attempts
-        <input type="number" name="attempts" min="0" step="1" value="1" required />
+        <input type="number" name="attempts" min="0" step="1" value="${editEntry ? editEntry.attempts : 1}" required />
       </label>
       <label>Successes
-        <input type="number" name="successes" min="0" step="1" value="0" required />
+        <input type="number" name="successes" min="0" step="1" value="${editEntry ? editEntry.successes : 0}" required />
       </label>
     </div>
     <label>Note (optional)
-      <input type="text" name="note" maxlength="140" placeholder="e.g. felt strong on the transition" />
+      <input type="text" name="note" maxlength="140" value="${escapeHtml(editEntry ? (editEntry.note || '') : '')}" placeholder="e.g. felt strong on the transition" />
     </label>
     <div class="modal-actions">
       <button type="button" class="btn btn-ghost" data-action="close-modal">Cancel</button>
-      <button type="submit" class="btn btn-primary">Save</button>
+      <button type="submit" class="btn btn-primary">${editEntry ? 'Save changes' : 'Save'}</button>
     </div>
   </form>`;
 }
@@ -824,6 +844,7 @@ function wireAddGoalTypeToggle() {
 function closeModal() {
   ui.modal = null;
   ui.modalGoalId = null;
+  ui.modalEntryId = null;
   ui.lightboxImage = null;
   render();
 }
@@ -872,42 +893,64 @@ function handleAddGoal(data) {
   render();
 }
 
-function handleLogMetricEntry(goalId, data, image) {
+function handleLogMetricEntry(goalId, data, image, entryId, removeImage) {
   const goal = state.goals.find(g => g.id === goalId);
   if (!goal) return;
   const values = data.getAll('value').map(v => parseFloat(v)).filter(v => !isNaN(v));
   if (!values.length) return;
   const value = Math.max(...values);
   const date = data.get('date') || todayStr();
-  goal.entries.push({ id: uid(), date, value, values, note: (data.get('note') || '').trim(), image: image || null });
+  const note = (data.get('note') || '').trim();
+
+  const entry = entryId ? goal.entries.find(e => e.id === entryId) : null;
+  if (entry) {
+    entry.date = date;
+    entry.value = value;
+    entry.values = values;
+    entry.note = note;
+    if (image) entry.image = image;
+    else if (removeImage) entry.image = null;
+  } else {
+    goal.entries.push({ id: uid(), date, value, values, note, image: image || null });
+  }
+
   try {
     saveState();
   } catch (err) {
-    goal.entries[goal.entries.length - 1].image = null;
+    const target = entry || goal.entries[goal.entries.length - 1];
+    target.image = null;
     saveState();
     alert('Entry saved, but the screenshot was too large for local storage and was not kept.');
   }
   ui.modal = null;
   ui.modalGoalId = null;
+  ui.modalEntryId = null;
   render();
 }
 
-function handleLogSkillEntry(goalId, data) {
+function handleLogSkillEntry(goalId, data, entryId) {
   const goal = state.goals.find(g => g.id === goalId);
   if (!goal) return;
   const attempts = Math.max(0, parseInt(data.get('attempts'), 10) || 0);
   const successesRaw = Math.max(0, parseInt(data.get('successes'), 10) || 0);
+  const successes = Math.min(successesRaw, attempts);
   const date = data.get('date') || todayStr();
-  goal.entries.push({
-    id: uid(),
-    date,
-    attempts,
-    successes: Math.min(successesRaw, attempts),
-    note: (data.get('note') || '').trim()
-  });
+  const note = (data.get('note') || '').trim();
+
+  const entry = entryId ? goal.entries.find(e => e.id === entryId) : null;
+  if (entry) {
+    entry.date = date;
+    entry.attempts = attempts;
+    entry.successes = successes;
+    entry.note = note;
+  } else {
+    goal.entries.push({ id: uid(), date, attempts, successes, note });
+  }
+
   saveState();
   ui.modal = null;
   ui.modalGoalId = null;
+  ui.modalEntryId = null;
   render();
 }
 
@@ -1016,7 +1059,7 @@ function handleImportFile(file) {
       if (!confirm('Import this file? It will replace all current data.')) return;
       state = parsed;
       saveState();
-      ui = { view: 'dashboard', goalId: null, modal: null, modalGoalId: null, lightboxImage: null };
+      ui = { view: 'dashboard', goalId: null, modal: null, modalGoalId: null, modalEntryId: null, lightboxImage: null };
       render();
     } catch (err) {
       alert('Could not import that file: ' + err.message);
@@ -1029,7 +1072,7 @@ function handleResetData() {
   if (!confirm('This will erase all goals and history and restore the defaults. Continue?')) return;
   state = defaultState();
   saveState();
-  ui = { view: 'dashboard', goalId: null, modal: null, modalGoalId: null, lightboxImage: null };
+  ui = { view: 'dashboard', goalId: null, modal: null, modalGoalId: null, modalEntryId: null, lightboxImage: null };
   render();
 }
 
@@ -1082,7 +1125,7 @@ function onAppClick(e) {
     case 'open-add-goal':
       ui.modal = 'addGoal'; ui.modalGoalId = null; render(); break;
     case 'open-log-entry':
-      ui.modal = 'logEntry'; ui.modalGoalId = goalId; render(); break;
+      ui.modal = 'logEntry'; ui.modalGoalId = goalId; ui.modalEntryId = actionEl.dataset.entryId || null; render(); break;
     case 'open-edit-goal':
       ui.modal = 'editGoal'; ui.modalGoalId = goalId; render(); break;
     case 'open-sync':
@@ -1170,10 +1213,11 @@ async function onAppSubmit(e) {
           console.error('Failed to process screenshot', err);
         }
       }
-      handleLogMetricEntry(form.dataset.goalId, data, image);
+      const removeImage = data.get('removeImage') === 'on';
+      handleLogMetricEntry(form.dataset.goalId, data, image, form.dataset.entryId || null, removeImage);
       break;
     }
-    case 'log-skill-entry': handleLogSkillEntry(form.dataset.goalId, data); break;
+    case 'log-skill-entry': handleLogSkillEntry(form.dataset.goalId, data, form.dataset.entryId || null); break;
     case 'add-milestone': handleAddMilestone(form.dataset.goalId, data); break;
     case 'edit-goal': handleEditGoal(form.dataset.goalId, data); break;
     case 'link-sync': handleLinkSyncCode(data.get('code') || ''); break;

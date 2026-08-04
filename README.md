@@ -51,6 +51,12 @@ that locally. Everything else in the app works fine without it.
   screenshot (e.g. a scale or scan reading) — it's resized and compressed in
   the browser before saving, and shows as a thumbnail in the history table
   that opens full-size on click.
+- **Entries are editable**: click the pencil icon next to any history-table
+  row (metric measurements or skill practice sessions) to reopen the log
+  form pre-filled with that entry's data and save changes in place, instead
+  of deleting and re-logging. For a metric entry with a screenshot, leaving
+  the file picker empty keeps the current image — check "Remove screenshot"
+  to clear it.
 - **Data lives in the browser's localStorage by default** — nothing is sent
   anywhere unless you turn on sync. Use "Export data" / "Import data" on the
   dashboard to back up or move data between browsers/devices manually.
