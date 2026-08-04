@@ -411,20 +411,20 @@ function renderMetricDetail(goal) {
   </div>
   ${renderMeter(pct, achieved, achieved ? 'Goal reached' : `${pct}% to goal`)}`;
 
-  const hasAttempts = entries.some(e => e.attempts != null);
+  const hasBreakdown = entries.some(e => Array.isArray(e.values) && e.values.length > 1);
 
   const rows = entries.map(e => `
     <tr>
       <td>${escapeHtml(formatDateLabel(e.date))}</td>
       <td>${e.value}${unit}</td>
-      ${hasAttempts ? `<td>${e.attempts != null ? e.attempts : ''}</td>` : ''}
+      ${hasBreakdown ? `<td>${Array.isArray(e.values) && e.values.length > 1 ? escapeHtml(e.values.join(' + ')) : ''}</td>` : ''}
       <td>${escapeHtml(e.note || '')}</td>
       <td>${e.image ? `<button class="thumb-btn" type="button" data-action="view-image" data-goal-id="${goal.id}" data-entry-id="${e.id}" aria-label="View screenshot"><img src="${e.image}" class="thumb-img" alt="" /></button>` : ''}</td>
       <td><button class="btn-icon" type="button" data-action="delete-entry" data-goal-id="${goal.id}" data-entry-id="${e.id}" aria-label="Delete entry">&times;</button></td>
     </tr>`).join('');
 
   const table = entries.length
-    ? `<table class="data-table"><thead><tr><th>Date</th><th>Value</th>${hasAttempts ? '<th>Attempts</th>' : ''}<th>Note</th><th></th><th></th></tr></thead><tbody>${rows}</tbody></table>`
+    ? `<table class="data-table"><thead><tr><th>Date</th><th>Value</th>${hasBreakdown ? '<th>Breakdown</th>' : ''}<th>Note</th><th></th><th></th></tr></thead><tbody>${rows}</tbody></table>`
     : '<p class="empty-state">No entries yet.</p>';
 
   return `
@@ -581,14 +581,12 @@ function renderLogEntryModal() {
       <label>Date
         <input type="date" name="date" value="${todayStr()}" max="${todayStr()}" required />
       </label>
-      <div class="form-row">
-        <label>Value (${escapeHtml(goal.unit || 'unit')})
-          <input type="number" name="value" step="any" required />
-        </label>
-        <label>Attempts (optional)
-          <input type="number" name="attempts" min="1" step="1" placeholder="e.g. 3 sets" />
-        </label>
-      </div>
+      <label>Value (${escapeHtml((goal.unit || 'unit').trim())})
+        <input type="number" name="value" step="any" required />
+      </label>
+      <div class="value-fields-wrap"></div>
+      <button type="button" class="btn btn-ghost btn-sm add-value-btn" data-action="add-value-field">+ Add another value</button>
+      <p class="field-hint">Add one value per attempt/set — they'll be summed into a single total for this entry.</p>
       <label>Screenshot (optional)
         <input type="file" name="image" accept="image/*" />
       </label>
@@ -771,12 +769,11 @@ function handleAddGoal(data) {
 function handleLogMetricEntry(goalId, data, image) {
   const goal = state.goals.find(g => g.id === goalId);
   if (!goal) return;
-  const value = parseFloat(data.get('value'));
-  if (isNaN(value)) return;
+  const values = data.getAll('value').map(v => parseFloat(v)).filter(v => !isNaN(v));
+  if (!values.length) return;
+  const value = values.reduce((sum, v) => sum + v, 0);
   const date = data.get('date') || todayStr();
-  const attemptsRaw = parseInt(data.get('attempts'), 10);
-  const attempts = Number.isFinite(attemptsRaw) && attemptsRaw > 0 ? attemptsRaw : null;
-  goal.entries.push({ id: uid(), date, value, attempts, note: (data.get('note') || '').trim(), image: image || null });
+  goal.entries.push({ id: uid(), date, value, values, note: (data.get('note') || '').trim(), image: image || null });
   try {
     saveState();
   } catch (err) {
@@ -963,6 +960,22 @@ function onAppClick(e) {
       const g = state.goals.find(g => g.id === goalId);
       const entry = g && g.entries.find(en => en.id === actionEl.dataset.entryId);
       if (entry && entry.image) { ui.lightboxImage = entry.image; render(); }
+      break;
+    }
+    case 'add-value-field': {
+      const wrap = document.querySelector('.value-fields-wrap');
+      if (wrap) {
+        const row = document.createElement('div');
+        row.className = 'inline-form value-field-row';
+        row.innerHTML = '<input type="number" name="value" step="any" placeholder="Value" /><button type="button" class="btn-icon" data-action="remove-value-field" aria-label="Remove value">&times;</button>';
+        wrap.appendChild(row);
+        row.querySelector('input').focus();
+      }
+      break;
+    }
+    case 'remove-value-field': {
+      const row = actionEl.closest('.value-field-row');
+      if (row) row.remove();
       break;
     }
     case 'toggle-milestone':
