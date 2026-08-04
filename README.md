@@ -31,11 +31,16 @@ in the app works fine without it.
   supplementary number alongside your actual body fat % trend, not an
   authoritative one. There's no way to derive BMI from a photo; it always
   needs a real weight and height — but the photo field can save you typing:
-  pick a photo of your scale or body-composition scanner display and
+  pick a photo of your scale or body-composition scanner display, leave the
+  "Auto-read weight/body fat % from this photo" box checked (default), and
   `fitness-tracker/api/scan-body.js` (Claude vision) reads the weight/body
   fat % digits shown and auto-fills those fields, still editable before
   saving. It only reads numbers off a display — it never tries to visually
-  guess body composition from a photo of a person.
+  guess body composition from a photo of a person. If you just want to
+  attach a body/progress photo for your own reference — not a scale
+  reading — uncheck that box first: the photo still saves with the entry,
+  but it's never sent anywhere, so it costs nothing beyond the (small,
+  local) storage space of the compressed image.
 - **Exercise** — goal-based tracking, same system as before:
   - **Metric goals** — a number to hit, with a direction (go up or down to a
     target). Push-ups (target 50 reps) is seeded by default. Use this type
@@ -76,9 +81,11 @@ in the app works fine without it.
 ### Data
 
 **Data lives entirely in the browser's localStorage** — nothing is sent
-anywhere except the two photo-scan calls (a label or scale/scanner photo is
-sent to `/api/scan-food` or `/api/scan-body` only when you pick a photo, and
-only that one image, not your saved data). There's no cross-device sync;
+anywhere except the two photo-scan calls (a label photo is sent to
+`/api/scan-food` whenever you pick one; a BMI photo is sent to
+`/api/scan-body` only if the "Auto-read" box is checked — uncheck it for
+reference-only body photos and nothing is sent). Only that one image is
+ever sent, never your saved data. There's no cross-device sync;
 each browser has its own independent copy. Use "Export data" / "Import data"
 (in the footer, visible on every section) to back up or move data between
 browsers/devices manually — Import fully replaces whatever's currently

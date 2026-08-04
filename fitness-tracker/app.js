@@ -972,10 +972,11 @@ function renderLogBmiModal() {
     <label>Date
       <input type="date" name="date" value="${editEntry ? editEntry.date : todayStr()}" max="${todayStr()}" required />
     </label>
-    <label>Photo of scale/scan reading ${editEntry && editEntry.image ? '' : '(optional)'}
+    <label>Photo ${editEntry && editEntry.image ? '' : '(optional)'}
       <input type="file" name="image" id="bmi-image-input" accept="image/*" />
     </label>
-    <p class="field-hint" id="bmi-scan-status">Pick a photo of your scale or scanner display to auto-fill weight/body fat % below — it reads the digits shown, it doesn't estimate from a photo of you.</p>
+    <label class="checkbox-row"><input type="checkbox" name="scanPhoto" id="bmi-scan-toggle" checked /> Auto-read weight/body fat % from this photo</label>
+    <p class="field-hint" id="bmi-scan-status">For a scale/scanner display: leave the box above checked to auto-fill the fields below from the digits shown. For a body photo you just want saved for your own reference, uncheck it first — reference photos stay in your browser only and are never sent anywhere, and it never tries to estimate body composition from how you look.</p>
     ${editEntry && editEntry.image ? `
     <div class="edit-image-current">
       <img src="${editEntry.image}" alt="Current screenshot" class="edit-image-preview" />
@@ -1692,6 +1693,12 @@ async function onAppChange(e) {
   if (e.target.id === 'bmi-image-input') {
     const file = e.target.files[0];
     if (!file) return;
+    const scanToggle = document.getElementById('bmi-scan-toggle');
+    if (scanToggle && !scanToggle.checked) {
+      const statusEl = document.getElementById('bmi-scan-status');
+      if (statusEl) statusEl.textContent = 'Photo attached for reference — not scanned, not sent anywhere.';
+      return;
+    }
     await handleScanBodyPhoto(file);
   }
 }
