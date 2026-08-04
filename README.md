@@ -54,11 +54,18 @@ in the app works fine without it.
     an attempts/successes count.
   - Click "+ Add goal" to add more of either type.
 - **Food Tracker** — log food/meals with calories, protein, carbs, fat, and
-  creatine (g). Optionally attach a photo of a nutrition label — it's sent to
-  an AI vision model (`fitness-tracker/api/scan-food.js`, using
-  `ANTHROPIC_API_KEY`) that reads the label and auto-fills the macro fields
-  (creatine included, for supplement labels that list it), which you can still edit
-  before saving. A **Servings** field scales all the macro fields at once —
+  creatine (g). Optionally attach a photo — a **"Photo is a..."** selector
+  picks how it's read: **Nutrition label** sends it to an AI vision model
+  (`fitness-tracker/api/scan-food.js`, using `ANTHROPIC_API_KEY`) that reads
+  the printed numbers directly and auto-fills the macro fields (creatine
+  included, for supplement labels that list it) — as reliable as the label
+  itself. **Photo of the meal itself** is for food with no label (a
+  restaurant plate, home cooking): the same endpoint instead has the AI
+  *visually estimate* calories/macros for the whole portion shown, which is
+  inherently a rough guess, not a reading — the UI says so explicitly, and
+  those numbers are worth double-checking more than a label scan's. Either
+  way the fields stay fully editable before saving. A **Servings** field
+  scales all the macro fields at once —
   set it to 1.5 if you're eating 1.5x whatever the label (or your typed-in
   numbers) describe; works whether the starting numbers came from a scan or
   manual entry, and re-scales correctly if you change it more than once or

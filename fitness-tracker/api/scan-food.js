@@ -6,9 +6,13 @@ function getClient() {
   return client;
 }
 
-const SYSTEM_PROMPT = `You read nutrition facts labels from photos. Respond with ONLY a JSON object (no markdown fences, no explanation) matching this exact shape:
+const LABEL_SYSTEM_PROMPT = `You read nutrition facts labels from photos. Respond with ONLY a JSON object (no markdown fences, no explanation) matching this exact shape:
 {"name": string|null, "calories": number|null, "protein": number|null, "carbs": number|null, "fat": number|null, "creatine": number|null}
 Use the values for ONE serving as printed on the label. "name" is your best guess at the food/product name if visible, otherwise null. "creatine" is grams of creatine (e.g. creatine monohydrate) per serving — most food labels won't list this, so leave it null unless the label explicitly shows a creatine amount (common on supplement tubs). If a field truly cannot be read, use null for it rather than guessing. If the image isn't a nutrition label at all, return all nulls.`;
+
+const MEAL_SYSTEM_PROMPT = `You estimate the nutritional content of a meal from a photo of the food itself (not a label — there are no printed numbers to read). Respond with ONLY a JSON object (no markdown fences, no explanation) matching this exact shape:
+{"name": string|null, "calories": number|null, "protein": number|null, "carbs": number|null, "fat": number|null, "creatine": null}
+Judge apparent ingredients, portion size, and likely preparation (fried, grilled, sauced, dressed, etc.) to give your best-effort estimate for the WHOLE portion shown in the photo, not a "per serving" amount. This is inherently a rough guess, not a precise reading — use reasonable typical-restaurant-portion judgment, and don't be afraid to give a number even if uncertain. "creatine" is always null since it can't be visually estimated. "name" is your best guess at what the dish is, otherwise null. If the image doesn't show food at all, return all nulls.`;
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
@@ -21,7 +25,7 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const { image } = req.body || {};
+  const { image, mode } = req.body || {};
   if (typeof image !== 'string') {
     res.status(400).json({ error: 'Missing image' });
     return;
@@ -33,18 +37,19 @@ module.exports = async (req, res) => {
     return;
   }
   const [, mediaType, base64Data] = match;
+  const isMealMode = mode === 'meal';
 
   try {
     const anthropic = getClient();
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-5',
       max_tokens: 300,
-      system: SYSTEM_PROMPT,
+      system: isMealMode ? MEAL_SYSTEM_PROMPT : LABEL_SYSTEM_PROMPT,
       messages: [{
         role: 'user',
         content: [
           { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64Data } },
-          { type: 'text', text: 'Read this nutrition facts label and return the JSON.' }
+          { type: 'text', text: isMealMode ? 'Estimate this meal\'s nutrition and return the JSON.' : 'Read this nutrition facts label and return the JSON.' }
         ]
       }]
     });

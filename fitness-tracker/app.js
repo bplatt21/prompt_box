@@ -1089,10 +1089,16 @@ function renderLogFoodModal() {
   return `
   <form data-form="log-food-entry" ${editEntry ? `data-entry-id="${editEntry.id}"` : ''}>
     <h2>${editEntry ? 'Edit food entry' : 'Log food'}</h2>
-    <label>Photo of nutrition label (optional)
+    <label>Photo is a...
+      <select name="photoMode" id="food-photo-mode">
+        <option value="label">Nutrition label (reads the printed numbers)</option>
+        <option value="meal">Photo of the meal itself (rough AI estimate)</option>
+      </select>
+    </label>
+    <label>Photo (optional)
       <input type="file" name="image" id="food-image-input" accept="image/*" />
     </label>
-    <p class="field-hint" id="food-scan-status">Pick a label photo to auto-fill the fields below, or just type them in.</p>
+    <p class="field-hint" id="food-scan-status">Pick a photo to auto-fill the fields below, or just type them in. A label photo is read directly; a meal photo gets a rough estimate — not a precise reading — so double-check those numbers especially.</p>
     ${editEntry && editEntry.image ? `
     <div class="edit-image-current">
       <img src="${editEntry.image}" alt="Current photo" class="edit-image-preview" />
@@ -1527,13 +1533,15 @@ function handleDeleteFoodEntry(entryId) {
 
 async function handleScanFoodPhoto(file) {
   const statusEl = document.getElementById('food-scan-status');
-  if (statusEl) statusEl.textContent = 'Scanning label…';
+  const modeEl = document.getElementById('food-photo-mode');
+  const isMealMode = modeEl && modeEl.value === 'meal';
+  if (statusEl) statusEl.textContent = isMealMode ? 'Estimating this meal…' : 'Scanning label…';
   try {
     const dataUrl = await resizeImageToDataUrl(file, 1200, 0.85);
     const res = await fetch('/api/scan-food', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image: dataUrl })
+      body: JSON.stringify({ image: dataUrl, mode: isMealMode ? 'meal' : 'label' })
     });
     if (!res.ok) throw new Error('Scan failed with status ' + res.status);
     const result = await res.json();
@@ -1551,9 +1559,15 @@ async function handleScanFoodPhoto(file) {
       if (el) el.value = round1(result[key] * servings);
     });
     if (statusEl) {
-      statusEl.textContent = (result.calories == null && result.protein == null)
-        ? "Couldn't read numbers off that photo — enter the values manually below."
-        : 'Scanned — double check the numbers below before saving.';
+      if (result.calories == null && result.protein == null) {
+        statusEl.textContent = isMealMode
+          ? "Couldn't tell what this was from the photo — enter the values manually below."
+          : "Couldn't read numbers off that photo — enter the values manually below.";
+      } else {
+        statusEl.textContent = isMealMode
+          ? "Estimated from the photo — this is a rough guess, not a precise reading, so treat it as a starting point and adjust as needed."
+          : 'Scanned — double check the numbers below before saving.';
+      }
     }
   } catch (err) {
     console.error('Food scan failed', err);
