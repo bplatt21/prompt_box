@@ -15,11 +15,10 @@ open fitness-tracker/index.html
 ```
 
 or serve the folder with any static file server, e.g. `python3 -m http.server`
-from inside `fitness-tracker/`. Cross-device sync and photo scanning
-(see below) won't work this way since those need the `/api/sync`,
-`/api/scan-food`, and `/api/scan-body` serverless functions — use
-`vercel dev` (from inside `fitness-tracker/`, with `REDIS_URL` and
-`ANTHROPIC_API_KEY` set) if you need to test those locally. Everything else
+from inside `fitness-tracker/`. Photo scanning (see below) won't work this
+way since it needs the `/api/scan-food` and `/api/scan-body` serverless
+functions — use `vercel dev` (from inside `fitness-tracker/`, with
+`ANTHROPIC_API_KEY` set) if you need to test that locally. Everything else
 in the app works fine without it.
 
 ### The three sections
@@ -74,32 +73,26 @@ in the app works fine without it.
   keeps the current image — check "Remove screenshot"/"Remove photo" to
   clear it.
 
-### Data & sync
+### Data
 
-- **Data lives in the browser's localStorage by default** — nothing is sent
-  anywhere unless you turn on sync. Use "Export data" / "Import data" (in the
-  footer, visible on every section) to back up or move data between
-  browsers/devices manually.
-- **Cross-device sync (optional)**: click "Sync devices" to generate a
-  private sync code, then enter that same code on another device to link it.
-  Once linked, data pushes to the cloud on every change and pulls the newest
-  copy on load (last-write-wins by timestamp — no merge of concurrent
-  edits). Backed by `fitness-tracker/api/sync.js`, storing one JSON blob per
-  sync code in Redis via `REDIS_URL`. The sync code is a shared secret, not a
-  login — anyone with the code can read/write that data, an appropriate
-  tradeoff for a personal single-user app but worth knowing.
+**Data lives entirely in the browser's localStorage** — nothing is sent
+anywhere except the two photo-scan calls (a label or scale/scanner photo is
+sent to `/api/scan-food` or `/api/scan-body` only when you pick a photo, and
+only that one image, not your saved data). There's no cross-device sync;
+each browser has its own independent copy. Use "Export data" / "Import data"
+(in the footer, visible on every section) to back up or move data between
+browsers/devices manually — Import fully replaces whatever's currently
+loaded, so export first if you want to keep both.
 
 ### Required environment variables (Vercel)
 
 | Variable | Used by | Purpose |
 |---|---|---|
-| `REDIS_URL` | `api/sync.js` | Cross-device sync storage |
 | `ANTHROPIC_API_KEY` | `api/scan-food.js`, `api/scan-body.js` | Reading nutrition labels and scale/scanner displays from photos |
 
-Both are optional in the sense that the app degrades gracefully without them
-(sync/scanning just silently fail with a friendly message instead of
-crashing), but neither feature works until its variable is set in the Vercel
-project.
+The app degrades gracefully without it — photo scanning just fails with a
+friendly "enter the values manually below" message instead of crashing — but
+scanning doesn't work until it's set in the Vercel project.
 
 ### Data migration notes
 

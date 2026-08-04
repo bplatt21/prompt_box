@@ -170,53 +170,7 @@ function loadState() {
 }
 
 function saveState() {
-  state.updatedAt = Date.now();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  pushSync();
-}
-
-/* ---------- cross-device sync ---------- */
-
-const SYNC_CODE_KEY = 'fitness-tracker-sync-code-v1';
-const SYNC_CODE_CHARS = 'abcdefghjkmnpqrstuvwxyz23456789';
-
-function getSyncCode() {
-  return localStorage.getItem(SYNC_CODE_KEY) || '';
-}
-
-function setSyncCode(code) {
-  if (code) localStorage.setItem(SYNC_CODE_KEY, code);
-  else localStorage.removeItem(SYNC_CODE_KEY);
-}
-
-function generateSyncCode() {
-  const bytes = crypto.getRandomValues(new Uint8Array(10));
-  return Array.from(bytes, b => SYNC_CODE_CHARS[b % SYNC_CODE_CHARS.length]).join('');
-}
-
-async function pushSync() {
-  const code = getSyncCode();
-  if (!code) return;
-  try {
-    await fetch('/api/sync', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code, data: state, updatedAt: state.updatedAt })
-    });
-  } catch (err) {
-    console.error('Sync push failed', err);
-  }
-}
-
-async function pullSync(code) {
-  try {
-    const res = await fetch(`/api/sync?code=${encodeURIComponent(code)}`);
-    if (!res.ok) return null;
-    return await res.json();
-  } catch (err) {
-    console.error('Sync pull failed', err);
-    return null;
-  }
 }
 
 let state = loadState();
@@ -502,12 +456,10 @@ function renderTopNav() {
 function renderGlobalFooter() {
   return `
   <footer class="app-footer">
-    <button class="btn btn-ghost btn-sm" type="button" data-action="open-sync">${getSyncCode() ? 'Sync devices (linked)' : 'Sync devices'}</button>
     <button class="btn btn-ghost btn-sm" type="button" data-action="export-data">Export data</button>
     <button class="btn btn-ghost btn-sm" type="button" data-action="trigger-import">Import data</button>
-    <button class="btn btn-ghost btn-sm btn-danger" type="button" data-action="reset-data">Reset all data</button>
     <input type="file" id="import-file-input" accept="application/json" hidden />
-    <p class="footer-note">Data is stored only in this browser (localStorage) unless you link sync. Export a backup regularly if that matters to you.</p>
+    <p class="footer-note">Data is stored only in this browser (localStorage). Export a backup regularly if that matters to you.</p>
   </footer>`;
 }
 
@@ -1011,36 +963,6 @@ function renderEditGoalModal() {
   </form>`;
 }
 
-function renderSyncModal() {
-  const code = getSyncCode();
-  if (code) {
-    return `
-    <h2>Sync devices</h2>
-    <p class="modal-subtitle">This device is linked. Enter this same code on another device to link it too.</p>
-    <div class="sync-code-display">${escapeHtml(code)}</div>
-    <button type="button" class="btn btn-ghost btn-sm" data-action="copy-sync-code">Copy code</button>
-    <p class="field-hint">Data syncs automatically whenever you're online. Removing the link only affects this device — your data stays put.</p>
-    <div class="modal-actions">
-      <button type="button" class="btn btn-ghost btn-danger" data-action="unlink-sync">Unlink this device</button>
-      <button type="button" class="btn btn-primary" data-action="close-modal">Done</button>
-    </div>`;
-  }
-  return `
-  <h2>Sync devices</h2>
-  <p class="modal-subtitle">Link this device to another so your data stays in sync automatically.</p>
-  <button type="button" class="btn btn-primary btn-sm" data-action="create-sync-code">Start syncing (new code)</button>
-  <p class="field-hint">On your other device, choose "Sync devices" too and enter the code shown here instead.</p>
-  <form data-form="link-sync">
-    <label>Have a code from another device?
-      <input type="text" name="code" placeholder="Enter sync code" maxlength="20" />
-    </label>
-    <div class="modal-actions">
-      <button type="button" class="btn btn-ghost" data-action="close-modal">Cancel</button>
-      <button type="submit" class="btn btn-primary">Link device</button>
-    </div>
-  </form>`;
-}
-
 function renderLogBmiModal() {
   const editEntry = ui.modalEntryId ? state.bmi.entries.find(e => e.id === ui.modalEntryId) : null;
   return `
@@ -1144,7 +1066,6 @@ function renderModal() {
   if (ui.modal === 'addGoal') inner = renderAddGoalModal();
   else if (ui.modal === 'logEntry') inner = renderLogEntryModal();
   else if (ui.modal === 'editGoal') inner = renderEditGoalModal();
-  else if (ui.modal === 'sync') inner = renderSyncModal();
   else if (ui.modal === 'logBmi') inner = renderLogBmiModal();
   else if (ui.modal === 'editHeight') inner = renderEditHeightModal();
   else if (ui.modal === 'logFood') inner = renderLogFoodModal();
@@ -1567,7 +1488,7 @@ async function handleScanBodyPhoto(file) {
   }
 }
 
-/* ---------- action handlers: data / sync ---------- */
+/* ---------- action handlers: data import/export ---------- */
 
 function handleExportData() {
   const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
@@ -1600,43 +1521,6 @@ function handleImportFile(file) {
   reader.readAsText(file);
 }
 
-function handleResetData() {
-  if (!confirm('This will erase all goals and history and restore the defaults. Continue?')) return;
-  state = defaultState();
-  saveState();
-  ui = { section: 'exercise', view: 'dashboard', goalId: null, modal: null, modalGoalId: null, modalEntryId: null, lightboxImage: null };
-  render();
-}
-
-async function handleCreateSyncCode() {
-  setSyncCode(generateSyncCode());
-  await pushSync();
-  render();
-}
-
-function handleUnlinkSync() {
-  setSyncCode('');
-  ui.modal = null;
-  ui.modalGoalId = null;
-  render();
-}
-
-async function handleLinkSyncCode(rawCode) {
-  const code = rawCode.trim();
-  if (!code) return;
-  setSyncCode(code);
-  const remote = await pullSync(code);
-  if (remote && remote.data) {
-    state = migrateState(remote.data);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } else {
-    await pushSync();
-  }
-  ui.modal = null;
-  ui.modalGoalId = null;
-  render();
-}
-
 /* ---------- event delegation ---------- */
 
 function onAppClick(e) {
@@ -1666,17 +1550,6 @@ function onAppClick(e) {
       ui.modal = 'logEntry'; ui.modalGoalId = goalId; ui.modalEntryId = actionEl.dataset.entryId || null; render(); break;
     case 'open-edit-goal':
       ui.modal = 'editGoal'; ui.modalGoalId = goalId; render(); break;
-    case 'open-sync':
-      ui.modal = 'sync'; ui.modalGoalId = null; render(); break;
-    case 'create-sync-code':
-      handleCreateSyncCode(); break;
-    case 'unlink-sync':
-      handleUnlinkSync(); break;
-    case 'copy-sync-code': {
-      const code = getSyncCode();
-      if (code && navigator.clipboard) navigator.clipboard.writeText(code);
-      break;
-    }
     case 'open-log-bmi':
       ui.modal = 'logBmi'; ui.modalEntryId = actionEl.dataset.entryId || null; render(); break;
     case 'delete-bmi-entry':
@@ -1733,8 +1606,6 @@ function onAppClick(e) {
       handleExportData(); break;
     case 'trigger-import':
       document.getElementById('import-file-input').click(); break;
-    case 'reset-data':
-      handleResetData(); break;
   }
 }
 
@@ -1774,7 +1645,6 @@ async function onAppSubmit(e) {
     case 'log-skill-entry': handleLogSkillEntry(form.dataset.goalId, data, form.dataset.entryId || null); break;
     case 'add-milestone': handleAddMilestone(form.dataset.goalId, data); break;
     case 'edit-goal': handleEditGoal(form.dataset.goalId, data); break;
-    case 'link-sync': handleLinkSyncCode(data.get('code') || ''); break;
     case 'log-bmi-entry': {
       const file = data.get('image');
       let image = null;
@@ -1828,21 +1698,12 @@ async function onAppChange(e) {
 
 /* ---------- init ---------- */
 
-async function init() {
+function init() {
   const app = document.getElementById('app');
   app.addEventListener('click', onAppClick);
   app.addEventListener('keydown', onAppKeydown);
   app.addEventListener('submit', onAppSubmit);
   app.addEventListener('change', onAppChange);
-
-  const code = getSyncCode();
-  if (code) {
-    const remote = await pullSync(code);
-    if (remote && remote.data && (remote.updatedAt || 0) > (state.updatedAt || 0)) {
-      state = migrateState(remote.data);
-    }
-  }
-
   saveState();
   render();
 }
