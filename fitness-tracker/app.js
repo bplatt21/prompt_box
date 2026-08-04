@@ -1050,6 +1050,15 @@ function renderLogBmiModal() {
     <label>Date
       <input type="date" name="date" value="${editEntry ? editEntry.date : todayStr()}" max="${todayStr()}" required />
     </label>
+    <label>Photo of scale/scan reading ${editEntry && editEntry.image ? '' : '(optional)'}
+      <input type="file" name="image" id="bmi-image-input" accept="image/*" />
+    </label>
+    <p class="field-hint" id="bmi-scan-status">Pick a photo of your scale or scanner display to auto-fill weight/body fat % below — it reads the digits shown, it doesn't estimate from a photo of you.</p>
+    ${editEntry && editEntry.image ? `
+    <div class="edit-image-current">
+      <img src="${editEntry.image}" alt="Current screenshot" class="edit-image-preview" />
+      <label class="checkbox-row"><input type="checkbox" name="removeImage" /> Remove screenshot</label>
+    </div>` : ''}
     <div class="form-row">
       <label>Body Fat % (optional)
         <input type="number" name="value" step="any" value="${editEntry && editEntry.value != null ? editEntry.value : ''}" />
@@ -1059,14 +1068,6 @@ function renderLogBmiModal() {
       </label>
     </div>
     <p class="field-hint">Enter at least one of the two. Weight is combined with your height setting to calculate BMI.</p>
-    <label>Screenshot ${editEntry && editEntry.image ? '' : '(optional)'}
-      <input type="file" name="image" accept="image/*" />
-    </label>
-    ${editEntry && editEntry.image ? `
-    <div class="edit-image-current">
-      <img src="${editEntry.image}" alt="Current screenshot" class="edit-image-preview" />
-      <label class="checkbox-row"><input type="checkbox" name="removeImage" /> Remove screenshot</label>
-    </div>` : ''}
     <label>Note (optional)
       <input type="text" name="note" maxlength="140" value="${escapeHtml(editEntry ? (editEntry.note || '') : '')}" placeholder="How'd it go?" />
     </label>
@@ -1536,6 +1537,36 @@ async function handleScanFoodPhoto(file) {
   }
 }
 
+async function handleScanBodyPhoto(file) {
+  const statusEl = document.getElementById('bmi-scan-status');
+  if (statusEl) statusEl.textContent = 'Reading the photo…';
+  try {
+    const dataUrl = await resizeImageToDataUrl(file, 1200, 0.85);
+    const res = await fetch('/api/scan-body', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: dataUrl })
+    });
+    if (!res.ok) throw new Error('Scan failed with status ' + res.status);
+    const result = await res.json();
+    const setIfPresent = (name, val) => {
+      if (val == null) return;
+      const el = document.querySelector(`[name="${name}"]`);
+      if (el) el.value = val;
+    };
+    setIfPresent('value', result.bodyFatPct);
+    setIfPresent('weightLb', result.weightLb);
+    if (statusEl) {
+      statusEl.textContent = (result.weightLb == null && result.bodyFatPct == null)
+        ? "Couldn't read a weight or body fat % off that photo — enter the values manually below."
+        : 'Read from photo — double check the numbers below before saving.';
+    }
+  } catch (err) {
+    console.error('Body scan failed', err);
+    if (statusEl) statusEl.textContent = "Couldn't reach the scanner — enter the values manually below.";
+  }
+}
+
 /* ---------- action handlers: data / sync ---------- */
 
 function handleExportData() {
@@ -1786,6 +1817,12 @@ async function onAppChange(e) {
     const file = e.target.files[0];
     if (!file) return;
     await handleScanFoodPhoto(file);
+    return;
+  }
+  if (e.target.id === 'bmi-image-input') {
+    const file = e.target.files[0];
+    if (!file) return;
+    await handleScanBodyPhoto(file);
   }
 }
 

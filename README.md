@@ -15,22 +15,28 @@ open fitness-tracker/index.html
 ```
 
 or serve the folder with any static file server, e.g. `python3 -m http.server`
-from inside `fitness-tracker/`. Cross-device sync and food-label scanning
-(see below) won't work this way since those need the `/api/sync` and
-`/api/scan-food` serverless functions — use `vercel dev` (from inside
-`fitness-tracker/`, with `REDIS_URL` and `ANTHROPIC_API_KEY` set) if you need
-to test those locally. Everything else in the app works fine without it.
+from inside `fitness-tracker/`. Cross-device sync and photo scanning
+(see below) won't work this way since those need the `/api/sync`,
+`/api/scan-food`, and `/api/scan-body` serverless functions — use
+`vercel dev` (from inside `fitness-tracker/`, with `REDIS_URL` and
+`ANTHROPIC_API_KEY` set) if you need to test those locally. Everything else
+in the app works fine without it.
 
 ### The three sections
 
 - **BMI** — log Body Fat % and/or Weight (lb) entries, each with an optional
-  screenshot and note. Set your height once (inches) and the app computes BMI
+  photo and note. Set your height once (inches) and the app computes BMI
   (`703 × weight ÷ height²`) plus the standard category (Underweight / Normal
   / Overweight / Obese) automatically. BMI is a rough weight-and-height
   estimate that doesn't account for muscle mass — it's shown as a
   supplementary number alongside your actual body fat % trend, not an
   authoritative one. There's no way to derive BMI from a photo; it always
-  needs a real weight and height.
+  needs a real weight and height — but the photo field can save you typing:
+  pick a photo of your scale or body-composition scanner display and
+  `fitness-tracker/api/scan-body.js` (Claude vision) reads the weight/body
+  fat % digits shown and auto-fills those fields, still editable before
+  saving. It only reads numbers off a display — it never tries to visually
+  guess body composition from a photo of a person.
 - **Exercise** — goal-based tracking, same system as before:
   - **Metric goals** — a number to hit, with a direction (go up or down to a
     target). Push-ups (target 50 reps) is seeded by default. Use this type
@@ -88,7 +94,7 @@ to test those locally. Everything else in the app works fine without it.
 | Variable | Used by | Purpose |
 |---|---|---|
 | `REDIS_URL` | `api/sync.js` | Cross-device sync storage |
-| `ANTHROPIC_API_KEY` | `api/scan-food.js` | Reading nutrition labels from photos |
+| `ANTHROPIC_API_KEY` | `api/scan-food.js`, `api/scan-body.js` | Reading nutrition labels and scale/scanner displays from photos |
 
 Both are optional in the sense that the app degrades gracefully without them
 (sync/scanning just silently fail with a friendly message instead of
