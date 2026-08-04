@@ -18,12 +18,28 @@ function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function nowTimeStr() {
+  const d = new Date();
+  return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+
 const EDIT_ICON_SVG = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M11.5 2.5l2 2-7.5 7.5H4v-2l7.5-7.5z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"/></svg>';
 
 function formatDateLabel(dateStr) {
   const d = new Date(dateStr + 'T00:00:00');
   if (isNaN(d)) return dateStr;
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function formatTimeLabel(timeStr) {
+  if (!timeStr) return null;
+  const parts = timeStr.split(':');
+  const h = parseInt(parts[0], 10);
+  const m = parseInt(parts[1], 10);
+  if (isNaN(h) || isNaN(m)) return null;
+  const period = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 || 12;
+  return `${h12}:${String(m).padStart(2, '0')} ${period}`;
 }
 
 function clamp(n, min, max) {
@@ -834,6 +850,7 @@ function renderFoodSection() {
 
   const entryRow = (e) => `
     <tr>
+      <td>${e.time ? escapeHtml(formatTimeLabel(e.time)) : '—'}</td>
       <td>${escapeHtml(e.name || '—')}</td>
       <td>${e.calories != null ? round1(e.calories) : '—'}</td>
       <td>${e.protein != null ? round1(e.protein) + 'g' : '—'}</td>
@@ -848,17 +865,22 @@ function renderFoodSection() {
   const dates = [...new Set(entries.map(e => e.date))];
 
   const rows = dates.map(date => {
-    const dayEntries = entries.filter(e => e.date === date);
+    const dayEntries = entries.filter(e => e.date === date).sort((a, b) => {
+      if (a.time == null && b.time == null) return 0;
+      if (a.time == null) return 1;
+      if (b.time == null) return -1;
+      return a.time.localeCompare(b.time);
+    });
     const dayTotals = foodTotalsForDate(date);
     const dayTotalsText = `${round1(dayTotals.calories)} cal · ${round1(dayTotals.protein)}g protein · ${round1(dayTotals.carbs)}g carbs · ${round1(dayTotals.fat)}g fat${dayTotals.creatine ? ' · ' + round1(dayTotals.creatine) + 'g creatine' : ''}`;
-    const dayHeader = `<tr class="day-group-row"><th colspan="9"><div class="day-group-header"><span class="day-group-date">${escapeHtml(formatDateLabel(date))}</span><span class="day-group-total">${escapeHtml(dayTotalsText)}</span></div></th></tr>`;
+    const dayHeader = `<tr class="day-group-row"><th colspan="10"><div class="day-group-header"><span class="day-group-date">${escapeHtml(formatDateLabel(date))}</span><span class="day-group-total">${escapeHtml(dayTotalsText)}</span></div></th></tr>`;
 
     const groups = MEAL_ORDER.map(key => ({ key, label: MEAL_LABELS[key], items: dayEntries.filter(e => e.meal === key) })).filter(g => g.items.length);
     const unlabeled = dayEntries.filter(e => !MEAL_ORDER.includes(e.meal));
     if (unlabeled.length) groups.push({ key: 'other', label: groups.length ? 'Other' : null, items: unlabeled });
 
     const groupRows = groups.map(g =>
-      (g.label ? `<tr class="meal-group-row"><th colspan="9">${escapeHtml(g.label)}</th></tr>` : '') +
+      (g.label ? `<tr class="meal-group-row"><th colspan="10">${escapeHtml(g.label)}</th></tr>` : '') +
       g.items.map(entryRow).join('')
     ).join('');
 
@@ -866,7 +888,7 @@ function renderFoodSection() {
   }).join('');
 
   const table = entries.length
-    ? `<div class="table-scroll"><table class="data-table"><thead><tr><th>Food</th><th>Calories</th><th>Protein</th><th>Carbs</th><th>Fat</th><th>Creatine</th><th></th><th></th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
+    ? `<div class="table-scroll"><table class="data-table"><thead><tr><th>Time</th><th>Food</th><th>Calories</th><th>Protein</th><th>Carbs</th><th>Fat</th><th>Creatine</th><th></th><th></th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
     : '<p class="empty-state">No food logged yet.</p>';
 
   return `
@@ -1104,9 +1126,14 @@ function renderLogFoodModal() {
       <img src="${editEntry.image}" alt="Current photo" class="edit-image-preview" />
       <label class="checkbox-row"><input type="checkbox" name="removeImage" /> Remove photo</label>
     </div>` : ''}
-    <label>Date
-      <input type="date" name="date" value="${editEntry ? editEntry.date : todayStr()}" max="${todayStr()}" required />
-    </label>
+    <div class="form-row">
+      <label>Date
+        <input type="date" name="date" value="${editEntry ? editEntry.date : todayStr()}" max="${todayStr()}" required />
+      </label>
+      <label>Time (optional)
+        <input type="time" name="time" value="${editEntry && editEntry.time ? editEntry.time : nowTimeStr()}" />
+      </label>
+    </div>
     <label>Food name (optional)
       <input type="text" name="name" maxlength="80" value="${escapeHtml(editEntry ? (editEntry.name || '') : '')}" placeholder="e.g. Greek yogurt" />
     </label>
@@ -1482,6 +1509,7 @@ function currentServingsValue() {
 
 function handleLogFoodEntry(data, image, entryId, removeImage) {
   const date = data.get('date') || todayStr();
+  const time = data.get('time') || null;
   const name = (data.get('name') || '').trim();
   const num = (key) => {
     const raw = data.get(key);
@@ -1498,6 +1526,7 @@ function handleLogFoodEntry(data, image, entryId, removeImage) {
   const entry = entryId ? state.food.entries.find(e => e.id === entryId) : null;
   if (entry) {
     entry.date = date;
+    entry.time = time;
     entry.name = name;
     entry.calories = calories;
     entry.protein = protein;
@@ -1509,7 +1538,7 @@ function handleLogFoodEntry(data, image, entryId, removeImage) {
     if (image) entry.image = image;
     else if (removeImage) entry.image = null;
   } else {
-    state.food.entries.push({ id: uid(), date, name, calories, protein, carbs, fat, creatine, meal, note, image: image || null });
+    state.food.entries.push({ id: uid(), date, time, name, calories, protein, carbs, fat, creatine, meal, note, image: image || null });
   }
 
   try {
