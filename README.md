@@ -32,13 +32,18 @@ from inside `fitness-tracker/`.
 - **Adding more goals** is a form, not code — click "+ Add goal" and pick
   either type. This is how "more goals to follow" is meant to be handled going
   forward.
-- Each metric goal gets a trend chart (hover for a tooltip) plotted against
-  its target, plus a full history table. You can log as many entries as you
-  want per day (e.g. an AM and PM session) — nothing gets overwritten.
+- Each metric goal gets a stacked bar chart (hover a bar for a tooltip)
+  plotted against its target, plus a full history table. You can log as many
+  entries as you want per day (e.g. an AM and PM session) — nothing gets
+  overwritten.
 - A metric entry can be logged as a single value, or as multiple values (e.g.
-  one per set/attempt) via "+ Add another value" on the log form — they're
-  summed into that entry's total automatically. The history table only shows
-  a Breakdown column for goals where you've actually used it.
+  one per set/attempt) via "+ Add another value" on the log form. **The
+  highest value becomes the entry's counted value** (e.g. for goal
+  progress) — the others are kept for context. Each value shows as its own
+  colored segment stacked in that entry's bar, so the bar's total height
+  reflects session volume even though only the best attempt counts toward
+  the goal. The history table only shows a Breakdown column for goals where
+  you've actually logged more than one value.
 - When logging a measurement for a metric goal, you can optionally attach a
   screenshot (e.g. a scale or scan reading) — it's resized and compressed in
   the browser before saving, and shows as a thumbnail in the history table

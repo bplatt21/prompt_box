@@ -130,6 +130,14 @@ function loadState() {
       });
       parsed.seededPushups = true;
     }
+    parsed.goals.forEach(g => {
+      if (g.type !== 'metric' || !Array.isArray(g.entries)) return;
+      g.entries.forEach(en => {
+        if (Array.isArray(en.values) && en.values.length) {
+          en.value = Math.max(...en.values);
+        }
+      });
+    });
     return parsed;
   } catch (e) {
     console.error('Failed to load saved data, starting fresh.', e);
@@ -200,61 +208,80 @@ function goalStatus(goal) {
   return started ? 'progress' : 'not-started';
 }
 
-/* ---------- chart (line chart: trend + target reference + crosshair/tooltip) ---------- */
+/* ---------- chart (stacked bar chart: each attempt is a colored segment + target reference) ---------- */
 
 const CHART_W = 640;
 const CHART_H = 260;
 const CHART_PAD = { top: 24, right: 24, bottom: 32, left: 46 };
+const STACK_COLORS = ['var(--stack-1)', 'var(--stack-2)', 'var(--stack-3)', 'var(--stack-4)', 'var(--stack-5)', 'var(--stack-6)'];
 
-function computeChartLayout(entries, target) {
+function segmentsFor(entry) {
+  return Array.isArray(entry.values) && entry.values.length ? entry.values : [entry.value];
+}
+
+function computeBarChartLayout(entries, target) {
   const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date));
   const innerW = CHART_W - CHART_PAD.left - CHART_PAD.right;
   const innerH = CHART_H - CHART_PAD.top - CHART_PAD.bottom;
-  const values = sorted.map(e => e.value);
-  const allValues = target != null ? [...values, target] : values;
-  let min = Math.min(...allValues);
-  let max = Math.max(...allValues);
-  if (min === max) { min -= 1; max += 1; }
-  const pad = (max - min) * 0.15 || 1;
-  min -= pad;
-  max += pad;
-  const xFor = (i) => CHART_PAD.left + (sorted.length <= 1 ? innerW / 2 : (i / (sorted.length - 1)) * innerW);
-  const yFor = (v) => CHART_PAD.top + innerH - ((v - min) / (max - min)) * innerH;
-  const points = sorted.map((e, i) => ({ x: xFor(i), y: yFor(e.value), date: e.date, value: e.value, note: e.note }));
-  return { points, min, max, xFor, yFor, innerW, innerH };
+  const totals = sorted.map(e => segmentsFor(e).reduce((sum, v) => sum + v, 0));
+  const max = (Math.max(target != null ? target : 0, ...totals, 0) || 1) * 1.15;
+  const min = 0;
+  const n = sorted.length;
+  const slotW = innerW / n;
+  const barW = Math.max(8, Math.min(slotW * 0.55, 56));
+  const yFor = (v) => CHART_PAD.top + innerH - (v / max) * innerH;
+  const bars = sorted.map((e, i) => {
+    const segs = segmentsFor(e);
+    const cx = CHART_PAD.left + slotW * (i + 0.5);
+    let cumulative = 0;
+    const rects = segs.map((v, si) => {
+      const y0 = yFor(cumulative);
+      cumulative += v;
+      const y1 = yFor(cumulative);
+      return { x: cx - barW / 2, y: y1, width: barW, height: Math.max(0, y0 - y1), color: STACK_COLORS[si % STACK_COLORS.length] };
+    });
+    return {
+      date: e.date,
+      total: cumulative,
+      rects,
+      cx,
+      slotX0: CHART_PAD.left + slotW * i,
+      slotX1: CHART_PAD.left + slotW * (i + 1),
+      breakdown: segs.length > 1 ? segs : null
+    };
+  });
+  return { bars, max, min, yFor, innerW, innerH, slotW };
 }
 
 function renderMetricChart(goal) {
   if (!goal.entries.length) {
     return '<div class="chart-empty">No entries yet — log your first measurement below to start your trend line.</div>';
   }
-  const layout = computeChartLayout(goal.entries, goal.target);
-  const { points, min, max } = layout;
+  const layout = computeBarChartLayout(goal.entries, goal.target);
+  const { bars, max, min } = layout;
   const ty = layout.yFor(goal.target);
-  const pointsAttr = points.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+  const unit = escapeHtml(goal.unit || '');
 
   const gridLines = [0.25, 0.5, 0.75].map(f => {
     const y = CHART_PAD.top + layout.innerH * f;
     return `<line x1="${CHART_PAD.left}" y1="${y.toFixed(1)}" x2="${CHART_W - CHART_PAD.right}" y2="${y.toFixed(1)}" class="chart-grid" />`;
   }).join('');
 
-  const dots = points.map((p, i) =>
-    `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4" class="chart-dot" data-i="${i}" />`
-  ).join('');
-
-  const unit = escapeHtml(goal.unit || '');
+  const barsMarkup = bars.map((b, i) => `
+      <g data-i="${i}">${b.rects.map(r =>
+        `<rect x="${r.x.toFixed(1)}" y="${r.y.toFixed(1)}" width="${r.width.toFixed(1)}" height="${r.height.toFixed(1)}" fill="${r.color}" class="chart-bar-seg" />`
+      ).join('')}</g>`).join('');
 
   return `
   <div class="chart-wrap" data-goal-id="${goal.id}">
-    <svg viewBox="0 0 ${CHART_W} ${CHART_H}" class="chart-svg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${escapeHtml(goal.name)} trend chart">
+    <svg viewBox="0 0 ${CHART_W} ${CHART_H}" class="chart-svg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${escapeHtml(goal.name)} chart">
       ${gridLines}
+      <rect class="chart-hover-col" x="0" y="${CHART_PAD.top}" width="0" height="${layout.innerH}" style="display:none" />
       <line x1="${CHART_PAD.left}" y1="${ty.toFixed(1)}" x2="${CHART_W - CHART_PAD.right}" y2="${ty.toFixed(1)}" class="chart-target-line" />
       <text x="${CHART_W - CHART_PAD.right}" y="${(ty - 8).toFixed(1)}" text-anchor="end" class="chart-target-label">Goal ${goal.target}${unit}</text>
-      <polyline points="${pointsAttr}" fill="none" class="chart-line" />
-      <line class="chart-crosshair" x1="0" y1="${CHART_PAD.top}" x2="0" y2="${CHART_H - CHART_PAD.bottom}" style="display:none" />
-      ${dots}
-      <text x="${CHART_PAD.left}" y="${CHART_H - 8}" class="chart-axis-label">${escapeHtml(formatDateLabel(points[0].date))}</text>
-      <text x="${CHART_W - CHART_PAD.right}" y="${CHART_H - 8}" text-anchor="end" class="chart-axis-label">${escapeHtml(formatDateLabel(points[points.length - 1].date))}</text>
+      ${barsMarkup}
+      <text x="${CHART_PAD.left}" y="${CHART_H - 8}" class="chart-axis-label">${escapeHtml(formatDateLabel(bars[0].date))}</text>
+      <text x="${CHART_W - CHART_PAD.right}" y="${CHART_H - 8}" text-anchor="end" class="chart-axis-label">${escapeHtml(formatDateLabel(bars[bars.length - 1].date))}</text>
       <text x="${CHART_PAD.left - 10}" y="${(layout.yFor(max) + 4).toFixed(1)}" text-anchor="end" class="chart-axis-label">${round1(max)}</text>
       <text x="${CHART_PAD.left - 10}" y="${(layout.yFor(min) + 4).toFixed(1)}" text-anchor="end" class="chart-axis-label">${round1(min)}</text>
     </svg>
@@ -267,46 +294,47 @@ function wireCharts() {
     const goalId = wrap.dataset.goalId;
     const goal = state.goals.find(g => g.id === goalId);
     if (!goal || !goal.entries.length) return;
-    const layout = computeChartLayout(goal.entries, goal.target);
+    const layout = computeBarChartLayout(goal.entries, goal.target);
     const svg = wrap.querySelector('.chart-svg');
-    const crosshair = wrap.querySelector('.chart-crosshair');
+    const hoverCol = wrap.querySelector('.chart-hover-col');
     const tooltip = wrap.querySelector('.chart-tooltip');
     if (!svg) return;
 
-    function nearestPoint(clientX) {
+    function barAt(clientX) {
       const rect = svg.getBoundingClientRect();
       const scaleX = CHART_W / rect.width;
       const xInSvg = (clientX - rect.left) * scaleX;
-      let nearest = layout.points[0];
-      let bestDist = Infinity;
-      for (const p of layout.points) {
-        const d = Math.abs(p.x - xInSvg);
-        if (d < bestDist) { bestDist = d; nearest = p; }
-      }
-      return { nearest, rect };
+      let idx = layout.bars.findIndex(b => xInSvg >= b.slotX0 && xInSvg < b.slotX1);
+      if (idx === -1) idx = xInSvg < layout.bars[0].slotX0 ? 0 : layout.bars.length - 1;
+      return { bar: layout.bars[idx], idx, rect };
     }
 
     function showAt(clientX) {
-      const { nearest, rect } = nearestPoint(clientX);
-      crosshair.setAttribute('x1', nearest.x);
-      crosshair.setAttribute('x2', nearest.x);
-      crosshair.style.display = '';
+      const { bar, idx, rect } = barAt(clientX);
+      hoverCol.setAttribute('x', (CHART_PAD.left + layout.slotW * idx).toFixed(1));
+      hoverCol.setAttribute('width', layout.slotW.toFixed(1));
+      hoverCol.style.display = '';
       tooltip.hidden = false;
       tooltip.textContent = '';
       const strong = document.createElement('strong');
-      strong.textContent = `${nearest.value}${goal.unit || ''}`;
-      const span = document.createElement('span');
-      span.textContent = formatDateLabel(nearest.date);
+      strong.textContent = `${bar.total}${goal.unit || ''}`;
       tooltip.appendChild(strong);
-      tooltip.appendChild(span);
+      if (bar.breakdown) {
+        const breakdown = document.createElement('span');
+        breakdown.textContent = bar.breakdown.join(' + ');
+        tooltip.appendChild(breakdown);
+      }
+      const dateSpan = document.createElement('span');
+      dateSpan.textContent = formatDateLabel(bar.date);
+      tooltip.appendChild(dateSpan);
       const scaleXInv = rect.width / CHART_W;
       const scaleYInv = rect.height / CHART_H;
-      tooltip.style.left = clamp(nearest.x * scaleXInv, 36, rect.width - 36) + 'px';
-      tooltip.style.top = (nearest.y * scaleYInv) + 'px';
+      tooltip.style.left = clamp(bar.cx * scaleXInv, 36, rect.width - 36) + 'px';
+      tooltip.style.top = (layout.yFor(bar.total) * scaleYInv) + 'px';
     }
 
     function hide() {
-      crosshair.style.display = 'none';
+      hoverCol.style.display = 'none';
       tooltip.hidden = true;
     }
 
@@ -586,7 +614,7 @@ function renderLogEntryModal() {
       </label>
       <div class="value-fields-wrap"></div>
       <button type="button" class="btn btn-ghost btn-sm add-value-btn" data-action="add-value-field">+ Add another value</button>
-      <p class="field-hint">Add one value per attempt/set — they'll be summed into a single total for this entry.</p>
+      <p class="field-hint">Add one value per attempt/set — the highest one becomes this entry's value.</p>
       <label>Screenshot (optional)
         <input type="file" name="image" accept="image/*" />
       </label>
@@ -771,7 +799,7 @@ function handleLogMetricEntry(goalId, data, image) {
   if (!goal) return;
   const values = data.getAll('value').map(v => parseFloat(v)).filter(v => !isNaN(v));
   if (!values.length) return;
-  const value = values.reduce((sum, v) => sum + v, 0);
+  const value = Math.max(...values);
   const date = data.get('date') || todayStr();
   goal.entries.push({ id: uid(), date, value, values, note: (data.get('note') || '').trim(), image: image || null });
   try {
