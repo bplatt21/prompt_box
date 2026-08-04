@@ -1085,6 +1085,10 @@ function renderLogFoodModal() {
     <label>Food name (optional)
       <input type="text" name="name" maxlength="80" value="${escapeHtml(editEntry ? (editEntry.name || '') : '')}" placeholder="e.g. Greek yogurt" />
     </label>
+    <label>Servings
+      <input type="number" name="servings" step="any" min="0" value="1" />
+    </label>
+    <p class="field-hint">Scales the fields below — e.g. if the label is per serving and you're eating 1.5 servings, set this to 1.5. Works whether the numbers came from a scan or you typed them in.</p>
     <div class="form-row">
       <label>Calories
         <input type="number" name="calories" step="any" value="${editEntry && editEntry.calories != null ? editEntry.calories : ''}" />
@@ -1434,6 +1438,15 @@ function handleEditHeight(data) {
 
 /* ---------- action handlers: food ---------- */
 
+const FOOD_MACRO_FIELDS = ['calories', 'protein', 'carbs', 'fat', 'creatine'];
+let foodServingsBaseline = {};
+
+function currentServingsValue() {
+  const el = document.querySelector('[name="servings"]');
+  const v = el ? parseFloat(el.value) : 1;
+  return isFinite(v) && v > 0 ? v : 1;
+}
+
 function handleLogFoodEntry(data, image, entryId, removeImage) {
   const date = data.get('date') || todayStr();
   const name = (data.get('name') || '').trim();
@@ -1501,11 +1514,13 @@ async function handleScanFoodPhoto(file) {
       if (el) el.value = val;
     };
     setIfPresent('name', result.name);
-    setIfPresent('calories', result.calories);
-    setIfPresent('protein', result.protein);
-    setIfPresent('carbs', result.carbs);
-    setIfPresent('fat', result.fat);
-    setIfPresent('creatine', result.creatine);
+    const servings = currentServingsValue();
+    FOOD_MACRO_FIELDS.forEach(key => {
+      if (result[key] == null) return;
+      foodServingsBaseline[key] = result[key];
+      const el = document.querySelector(`[name="${key}"]`);
+      if (el) el.value = round1(result[key] * servings);
+    });
     if (statusEl) {
       statusEl.textContent = (result.calories == null && result.protein == null)
         ? "Couldn't read numbers off that photo — enter the values manually below."
@@ -1616,6 +1631,7 @@ function onAppClick(e) {
     case 'open-edit-height':
       ui.modal = 'editHeight'; render(); break;
     case 'open-log-food':
+      foodServingsBaseline = {};
       ui.modal = 'logFood'; ui.modalEntryId = actionEl.dataset.entryId || null; render(); break;
     case 'delete-food-entry':
       handleDeleteFoodEntry(actionEl.dataset.entryId); break;
@@ -1746,6 +1762,24 @@ async function onAppChange(e) {
     const file = e.target.files[0];
     if (!file) return;
     await handleScanFoodPhoto(file);
+    return;
+  }
+  if (e.target.name === 'servings') {
+    const servings = currentServingsValue();
+    FOOD_MACRO_FIELDS.forEach(key => {
+      const el = document.querySelector(`[name="${key}"]`);
+      if (!el) return;
+      if (!(key in foodServingsBaseline)) {
+        foodServingsBaseline[key] = el.value !== '' ? parseFloat(el.value) : null;
+      }
+      const base = foodServingsBaseline[key];
+      if (base != null) el.value = round1(base * servings);
+    });
+    return;
+  }
+  if (FOOD_MACRO_FIELDS.includes(e.target.name)) {
+    const v = e.target.value !== '' ? parseFloat(e.target.value) : null;
+    foodServingsBaseline[e.target.name] = v != null ? v / currentServingsValue() : null;
     return;
   }
   if (e.target.id === 'bmi-image-input') {

@@ -58,10 +58,15 @@ in the app works fine without it.
   an AI vision model (`fitness-tracker/api/scan-food.js`, using
   `ANTHROPIC_API_KEY`) that reads the label and auto-fills the macro fields
   (creatine included, for supplement labels that list it), which you can still edit
-  before saving. Shows today's totals at the top, a Trend chart tracking daily
-  protein against a 170g/day goal (each bar is one day, split into a colored
-  segment per meal logged that day, with a dashed goal line), and a full
-  history below.
+  before saving. A **Servings** field scales all the macro fields at once —
+  set it to 1.5 if you're eating 1.5x whatever the label (or your typed-in
+  numbers) describe; works whether the starting numbers came from a scan or
+  manual entry, and re-scales correctly if you change it more than once or
+  hand-correct a field afterward. It's a form-only convenience — only the
+  final scaled numbers get saved on the entry. Shows today's totals at the
+  top, a Trend chart tracking daily protein against a 170g/day goal (each bar
+  is one day, split into a colored segment per meal logged that day, with a
+  dashed goal line), and a full history below.
 
 ### Shared entry features (BMI, Exercise, Food)
 
