@@ -70,21 +70,14 @@ function defaultState() {
   const now = new Date().toISOString();
   return {
     seededPushups: true,
+    bmi: { heightIn: null, entries: [] },
+    food: { entries: [] },
     goals: [
-      {
-        id: uid(),
-        type: 'metric',
-        name: 'Body Fat %',
-        unit: '%',
-        direction: 'decrease',
-        target: 10,
-        createdAt: now,
-        entries: []
-      },
       {
         id: uid(),
         type: 'skill',
         name: 'Muscle-Up',
+        unit: ' reps',
         createdAt: now,
         achieved: false,
         achievedDate: null,
@@ -113,34 +106,63 @@ function defaultState() {
   };
 }
 
+function migrateState(parsed) {
+  if (!parsed.seededPushups) {
+    parsed.goals.push({
+      id: uid(),
+      type: 'metric',
+      name: 'Push-ups',
+      unit: ' reps',
+      direction: 'increase',
+      target: 50,
+      createdAt: new Date().toISOString(),
+      entries: []
+    });
+    parsed.seededPushups = true;
+  }
+
+  if (!parsed.bmi) {
+    const bodyFatGoal = parsed.goals.find(g => g.type === 'metric' && g.name === 'Body Fat %');
+    parsed.bmi = {
+      heightIn: null,
+      entries: bodyFatGoal ? bodyFatGoal.entries.map(e => ({
+        id: e.id,
+        date: e.date,
+        value: e.value != null ? e.value : null,
+        weightLb: null,
+        note: e.note || '',
+        image: e.image || null
+      })) : []
+    };
+    if (bodyFatGoal) {
+      parsed.goals = parsed.goals.filter(g => g.id !== bodyFatGoal.id);
+    }
+  }
+
+  if (!parsed.food) {
+    parsed.food = { entries: [] };
+  }
+
+  parsed.goals.forEach(g => {
+    if (g.type === 'skill' && !g.unit) g.unit = ' reps';
+    if (!Array.isArray(g.entries)) return;
+    g.entries.forEach(en => {
+      if (Array.isArray(en.values) && en.values.length) {
+        en.value = Math.max(...en.values);
+      }
+    });
+  });
+
+  return parsed;
+}
+
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return defaultState();
     const parsed = JSON.parse(raw);
     if (!parsed || !Array.isArray(parsed.goals)) return defaultState();
-    if (!parsed.seededPushups) {
-      parsed.goals.push({
-        id: uid(),
-        type: 'metric',
-        name: 'Push-ups',
-        unit: ' reps',
-        direction: 'increase',
-        target: 50,
-        createdAt: new Date().toISOString(),
-        entries: []
-      });
-      parsed.seededPushups = true;
-    }
-    parsed.goals.forEach(g => {
-      if (g.type !== 'metric' || !Array.isArray(g.entries)) return;
-      g.entries.forEach(en => {
-        if (Array.isArray(en.values) && en.values.length) {
-          en.value = Math.max(...en.values);
-        }
-      });
-    });
-    return parsed;
+    return migrateState(parsed);
   } catch (e) {
     console.error('Failed to load saved data, starting fresh.', e);
     return defaultState();
@@ -198,9 +220,17 @@ async function pullSync(code) {
 }
 
 let state = loadState();
-let ui = { view: 'dashboard', goalId: null, modal: null, modalGoalId: null, modalEntryId: null, lightboxImage: null };
+let ui = {
+  section: 'exercise',
+  view: 'dashboard',
+  goalId: null,
+  modal: null,
+  modalGoalId: null,
+  modalEntryId: null,
+  lightboxImage: null
+};
 
-/* ---------- domain logic ---------- */
+/* ---------- domain logic: exercise goals ---------- */
 
 function sortedEntries(goal) {
   return [...goal.entries].sort((a, b) => a.date.localeCompare(b.date));
@@ -256,6 +286,49 @@ function goalStatus(goal) {
   return started ? 'progress' : 'not-started';
 }
 
+/* ---------- domain logic: BMI ---------- */
+
+function sortedBmiEntries() {
+  return [...state.bmi.entries].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function bmiLatestEntry() {
+  const s = sortedBmiEntries();
+  return s.length ? s[s.length - 1] : null;
+}
+
+function bmiBaselineEntry() {
+  const s = sortedBmiEntries();
+  return s.length ? s[0] : null;
+}
+
+function computeBmi(weightLb, heightIn) {
+  if (!weightLb || !heightIn) return null;
+  return 703 * weightLb / (heightIn * heightIn);
+}
+
+function bmiCategory(bmi) {
+  if (bmi == null) return '';
+  if (bmi < 18.5) return 'Underweight';
+  if (bmi < 25) return 'Normal';
+  if (bmi < 30) return 'Overweight';
+  return 'Obese';
+}
+
+/* ---------- domain logic: food ---------- */
+
+function foodTotalsForDate(dateStr) {
+  return state.food.entries
+    .filter(e => e.date === dateStr)
+    .reduce((acc, e) => {
+      acc.calories += e.calories || 0;
+      acc.protein += e.protein || 0;
+      acc.carbs += e.carbs || 0;
+      acc.fat += e.fat || 0;
+      return acc;
+    }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
+}
+
 /* ---------- chart (stacked bar chart: each attempt is a colored segment + target reference) ---------- */
 
 const CHART_W = 640;
@@ -301,14 +374,34 @@ function computeBarChartLayout(entries, target) {
   return { bars, max, min, yFor, innerW, innerH, slotW };
 }
 
-function renderMetricChart(goal) {
-  if (!goal.entries.length) {
-    return '<div class="chart-empty">No entries yet — log your first measurement below to start your trend line.</div>';
+function chartSpecForGoal(goal) {
+  return { entries: goal.entries, target: goal.target, unit: goal.unit || '', name: goal.name };
+}
+
+function chartSpecForBmi() {
+  return { entries: state.bmi.entries.filter(e => e.value != null), target: 10, unit: '%', name: 'Body Fat %' };
+}
+
+function getChartSpec(kind, id) {
+  if (kind === 'bmi') return chartSpecForBmi();
+  const goal = state.goals.find(g => g.id === id);
+  return goal ? chartSpecForGoal(goal) : null;
+}
+
+function renderChartBlock(kind, id) {
+  const spec = getChartSpec(kind, id);
+  if (!spec || !spec.entries.length) {
+    return '<div class="chart-empty">No entries yet — log your first one below to start your trend line.</div>';
   }
-  const layout = computeBarChartLayout(goal.entries, goal.target);
+  const layout = computeBarChartLayout(spec.entries, spec.target);
   const { bars, max, min } = layout;
-  const ty = layout.yFor(goal.target);
-  const unit = escapeHtml(goal.unit || '');
+  const unit = escapeHtml(spec.unit || '');
+  const targetLine = spec.target != null ? (() => {
+    const ty = layout.yFor(spec.target);
+    return `
+      <line x1="${CHART_PAD.left}" y1="${ty.toFixed(1)}" x2="${CHART_W - CHART_PAD.right}" y2="${ty.toFixed(1)}" class="chart-target-line" />
+      <text x="${CHART_W - CHART_PAD.right}" y="${(ty - 8).toFixed(1)}" text-anchor="end" class="chart-target-label">Goal ${spec.target}${unit}</text>`;
+  })() : '';
 
   const gridLines = [0.25, 0.5, 0.75].map(f => {
     const y = CHART_PAD.top + layout.innerH * f;
@@ -321,12 +414,11 @@ function renderMetricChart(goal) {
       ).join('')}</g>`).join('');
 
   return `
-  <div class="chart-wrap" data-goal-id="${goal.id}">
-    <svg viewBox="0 0 ${CHART_W} ${CHART_H}" class="chart-svg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${escapeHtml(goal.name)} chart">
+  <div class="chart-wrap" data-chart-kind="${kind}" data-chart-id="${id || ''}">
+    <svg viewBox="0 0 ${CHART_W} ${CHART_H}" class="chart-svg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${escapeHtml(spec.name)} chart">
       ${gridLines}
       <rect class="chart-hover-col" x="0" y="${CHART_PAD.top}" width="0" height="${layout.innerH}" style="display:none" />
-      <line x1="${CHART_PAD.left}" y1="${ty.toFixed(1)}" x2="${CHART_W - CHART_PAD.right}" y2="${ty.toFixed(1)}" class="chart-target-line" />
-      <text x="${CHART_W - CHART_PAD.right}" y="${(ty - 8).toFixed(1)}" text-anchor="end" class="chart-target-label">Goal ${goal.target}${unit}</text>
+      ${targetLine}
       ${barsMarkup}
       <text x="${CHART_PAD.left}" y="${CHART_H - 8}" class="chart-axis-label">${escapeHtml(formatDateLabel(bars[0].date))}</text>
       <text x="${CHART_W - CHART_PAD.right}" y="${CHART_H - 8}" text-anchor="end" class="chart-axis-label">${escapeHtml(formatDateLabel(bars[bars.length - 1].date))}</text>
@@ -339,10 +431,11 @@ function renderMetricChart(goal) {
 
 function wireCharts() {
   document.querySelectorAll('.chart-wrap').forEach(wrap => {
-    const goalId = wrap.dataset.goalId;
-    const goal = state.goals.find(g => g.id === goalId);
-    if (!goal || !goal.entries.length) return;
-    const layout = computeBarChartLayout(goal.entries, goal.target);
+    const kind = wrap.dataset.chartKind;
+    const id = wrap.dataset.chartId;
+    const spec = getChartSpec(kind, id);
+    if (!spec || !spec.entries.length) return;
+    const layout = computeBarChartLayout(spec.entries, spec.target);
     const svg = wrap.querySelector('.chart-svg');
     const hoverCol = wrap.querySelector('.chart-hover-col');
     const tooltip = wrap.querySelector('.chart-tooltip');
@@ -365,7 +458,7 @@ function wireCharts() {
       tooltip.hidden = false;
       tooltip.textContent = '';
       const strong = document.createElement('strong');
-      strong.textContent = `${bar.total}${goal.unit || ''}`;
+      strong.textContent = `${bar.total}${spec.unit || ''}`;
       tooltip.appendChild(strong);
       if (bar.breakdown) {
         const breakdown = document.createElement('span');
@@ -392,7 +485,33 @@ function wireCharts() {
   });
 }
 
-/* ---------- views ---------- */
+/* ---------- top-level navigation ---------- */
+
+function renderTopNav() {
+  const tabs = [
+    { key: 'bmi', label: 'BMI' },
+    { key: 'exercise', label: 'Exercise' },
+    { key: 'food', label: 'Food Tracker' }
+  ];
+  return `
+  <nav class="top-nav">
+    ${tabs.map(t => `<button class="top-nav-tab ${ui.section === t.key ? 'active' : ''}" type="button" data-action="show-section" data-section="${t.key}">${t.label}</button>`).join('')}
+  </nav>`;
+}
+
+function renderGlobalFooter() {
+  return `
+  <footer class="app-footer">
+    <button class="btn btn-ghost btn-sm" type="button" data-action="open-sync">${getSyncCode() ? 'Sync devices (linked)' : 'Sync devices'}</button>
+    <button class="btn btn-ghost btn-sm" type="button" data-action="export-data">Export data</button>
+    <button class="btn btn-ghost btn-sm" type="button" data-action="trigger-import">Import data</button>
+    <button class="btn btn-ghost btn-sm btn-danger" type="button" data-action="reset-data">Reset all data</button>
+    <input type="file" id="import-file-input" accept="application/json" hidden />
+    <p class="footer-note">Data is stored only in this browser (localStorage) unless you link sync. Export a backup regularly if that matters to you.</p>
+  </footer>`;
+}
+
+/* ---------- views: exercise ---------- */
 
 function renderStatusBadge(status) {
   if (status === 'achieved') {
@@ -442,25 +561,17 @@ function renderGoalCard(goal) {
   </article>`;
 }
 
-function renderDashboard() {
+function renderExerciseDashboard() {
   const cards = state.goals.map(renderGoalCard).join('');
   return `
   <div class="page-header">
     <div>
-      <h1>Fitness Progress</h1>
+      <h1>Exercise</h1>
       <p class="page-subtitle">Track the metrics and skills that matter to you.</p>
     </div>
     <button class="btn btn-primary" type="button" data-action="open-add-goal">+ Add goal</button>
   </div>
-  <div class="goal-grid">${cards || '<p class="empty-state">No goals yet — add your first one.</p>'}</div>
-  <footer class="app-footer">
-    <button class="btn btn-ghost btn-sm" type="button" data-action="open-sync">${getSyncCode() ? 'Sync devices (linked)' : 'Sync devices'}</button>
-    <button class="btn btn-ghost btn-sm" type="button" data-action="export-data">Export data</button>
-    <button class="btn btn-ghost btn-sm" type="button" data-action="trigger-import">Import data</button>
-    <button class="btn btn-ghost btn-sm btn-danger" type="button" data-action="reset-data">Reset all data</button>
-    <input type="file" id="import-file-input" accept="application/json" hidden />
-    <p class="footer-note">Data is stored only in this browser (localStorage) unless you link sync. Export a backup regularly if that matters to you.</p>
-  </footer>`;
+  <div class="goal-grid">${cards || '<p class="empty-state">No goals yet — add your first one.</p>'}</div>`;
 }
 
 function renderMetricDetail(goal) {
@@ -512,7 +623,7 @@ function renderMetricDetail(goal) {
       <h2>Trend</h2>
       <button class="btn btn-primary btn-sm" type="button" data-action="open-log-entry" data-goal-id="${goal.id}">+ Log measurement</button>
     </div>
-    ${renderMetricChart(goal)}
+    ${renderChartBlock('goal', goal.id)}
   </section>
   <section class="card">
     <h2>History</h2>
@@ -522,6 +633,7 @@ function renderMetricDetail(goal) {
 
 function renderSkillDetail(goal) {
   const pct = skillProgressPct(goal);
+  const unit = escapeHtml((goal.unit || 'reps').trim());
 
   const milestoneRows = goal.milestones.map(m => `
     <li class="milestone-row ${m.done ? 'milestone-done' : ''}">
@@ -534,17 +646,34 @@ function renderSkillDetail(goal) {
     </li>`).join('');
 
   const entries = sortedEntries(goal).reverse();
-  const rows = entries.map(e => `
+  const hasBreakdown = entries.some(e => Array.isArray(e.values) && e.values.length > 1);
+
+  const rows = entries.map(e => {
+    const isLegacy = e.value == null && e.attempts != null;
+    if (isLegacy) {
+      return `
+      <tr>
+        <td>${escapeHtml(formatDateLabel(e.date))}</td>
+        <td>${e.successes}/${e.attempts} attempts (legacy)</td>
+        ${hasBreakdown ? '<td></td>' : ''}
+        <td>${escapeHtml(e.note || '')}</td>
+        <td></td>
+        <td><button class="btn-icon" type="button" data-action="delete-entry" data-goal-id="${goal.id}" data-entry-id="${e.id}" aria-label="Delete entry">&times;</button></td>
+      </tr>`;
+    }
+    return `
     <tr>
       <td>${escapeHtml(formatDateLabel(e.date))}</td>
-      <td>${e.successes}/${e.attempts}</td>
+      <td>${e.value} ${unit}</td>
+      ${hasBreakdown ? `<td>${Array.isArray(e.values) && e.values.length > 1 ? escapeHtml(e.values.join(' + ')) : ''}</td>` : ''}
       <td>${escapeHtml(e.note || '')}</td>
       <td><button class="btn-icon btn-icon-edit" type="button" data-action="open-log-entry" data-goal-id="${goal.id}" data-entry-id="${e.id}" aria-label="Edit entry">${EDIT_ICON_SVG}</button></td>
       <td><button class="btn-icon" type="button" data-action="delete-entry" data-goal-id="${goal.id}" data-entry-id="${e.id}" aria-label="Delete entry">&times;</button></td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 
   const table = entries.length
-    ? `<table class="data-table"><thead><tr><th>Date</th><th>Success / Attempts</th><th>Note</th><th></th><th></th></tr></thead><tbody>${rows}</tbody></table>`
+    ? `<table class="data-table"><thead><tr><th>Date</th><th>Value</th>${hasBreakdown ? '<th>Breakdown</th>' : ''}<th>Note</th><th></th><th></th></tr></thead><tbody>${rows}</tbody></table>`
     : '<p class="empty-state">No sessions logged yet.</p>';
 
   const achievedBanner = goal.achieved ? `
@@ -582,6 +711,11 @@ function renderSkillDetail(goal) {
   </section>
 
   <section class="card">
+    <h2>Trend</h2>
+    ${renderChartBlock('goal', goal.id)}
+  </section>
+
+  <section class="card">
     <div class="card-header-row">
       <h2>Practice log</h2>
       <button class="btn btn-primary btn-sm" type="button" data-action="open-log-entry" data-goal-id="${goal.id}">+ Log session</button>
@@ -604,6 +738,134 @@ function renderGoalDetail(goal) {
     </div>
   </div>
   ${body}`;
+}
+
+/* ---------- views: BMI ---------- */
+
+function renderBmiSection() {
+  const latest = bmiLatestEntry();
+  const heightIn = state.bmi.heightIn;
+  const latestBmi = latest ? computeBmi(latest.weightLb, heightIn) : null;
+  const entries = sortedBmiEntries().reverse();
+
+  const summary = `
+  <div class="detail-summary">
+    <div class="summary-tile">
+      <span class="summary-label">Body Fat %</span>
+      <span class="summary-value">${latest && latest.value != null ? latest.value + '%' : '—'}</span>
+    </div>
+    <div class="summary-tile">
+      <span class="summary-label">Weight</span>
+      <span class="summary-value">${latest && latest.weightLb != null ? latest.weightLb + ' lb' : '—'}</span>
+    </div>
+    <div class="summary-tile">
+      <span class="summary-label">BMI</span>
+      <span class="summary-value">${latestBmi != null ? round1(latestBmi) + (bmiCategory(latestBmi) ? ' · ' + bmiCategory(latestBmi) : '') : '—'}</span>
+    </div>
+    <div class="summary-tile">
+      <span class="summary-label">Height</span>
+      <span class="summary-value summary-value-row">
+        ${heightIn ? heightIn + ' in' : 'Not set'}
+        <button class="btn-icon btn-icon-edit" type="button" data-action="open-edit-height" aria-label="Edit height">${EDIT_ICON_SVG}</button>
+      </span>
+    </div>
+  </div>
+  <p class="field-hint">BMI is a rough estimate from weight and height alone — it doesn't account for muscle mass, so treat it as a supplementary number alongside your actual body fat % readings, not an authoritative one.</p>`;
+
+  const rows = entries.map(e => {
+    const bmi = computeBmi(e.weightLb, heightIn);
+    return `
+    <tr>
+      <td>${escapeHtml(formatDateLabel(e.date))}</td>
+      <td>${e.value != null ? e.value + '%' : '—'}</td>
+      <td>${e.weightLb != null ? e.weightLb + ' lb' : '—'}</td>
+      <td>${bmi != null ? round1(bmi) : '—'}</td>
+      <td>${escapeHtml(e.note || '')}</td>
+      <td>${e.image ? `<button class="thumb-btn" type="button" data-action="view-image" data-entry-kind="bmi" data-entry-id="${e.id}" aria-label="View screenshot"><img src="${e.image}" class="thumb-img" alt="" /></button>` : ''}</td>
+      <td><button class="btn-icon btn-icon-edit" type="button" data-action="open-log-bmi" data-entry-id="${e.id}" aria-label="Edit entry">${EDIT_ICON_SVG}</button></td>
+      <td><button class="btn-icon" type="button" data-action="delete-bmi-entry" data-entry-id="${e.id}" aria-label="Delete entry">&times;</button></td>
+    </tr>`;
+  }).join('');
+
+  const table = entries.length
+    ? `<table class="data-table"><thead><tr><th>Date</th><th>Body Fat %</th><th>Weight</th><th>BMI</th><th>Note</th><th></th><th></th><th></th></tr></thead><tbody>${rows}</tbody></table>`
+    : '<p class="empty-state">No entries yet.</p>';
+
+  return `
+  <div class="page-header">
+    <div>
+      <h1>BMI</h1>
+      <p class="page-subtitle">Body composition, weight, and BMI over time.</p>
+    </div>
+    <button class="btn btn-primary" type="button" data-action="open-log-bmi">+ Log entry</button>
+  </div>
+  ${summary}
+  <section class="card">
+    <h2>Trend</h2>
+    ${renderChartBlock('bmi', null)}
+  </section>
+  <section class="card">
+    <h2>History</h2>
+    ${table}
+  </section>`;
+}
+
+/* ---------- views: food ---------- */
+
+function renderFoodSection() {
+  const totals = foodTotalsForDate(todayStr());
+  const entries = [...state.food.entries].sort((a, b) => b.date.localeCompare(a.date));
+
+  const summary = `
+  <div class="detail-summary">
+    <div class="summary-tile">
+      <span class="summary-label">Calories today</span>
+      <span class="summary-value">${round1(totals.calories)}</span>
+    </div>
+    <div class="summary-tile">
+      <span class="summary-label">Protein today</span>
+      <span class="summary-value">${round1(totals.protein)}g</span>
+    </div>
+    <div class="summary-tile">
+      <span class="summary-label">Carbs today</span>
+      <span class="summary-value">${round1(totals.carbs)}g</span>
+    </div>
+    <div class="summary-tile">
+      <span class="summary-label">Fat today</span>
+      <span class="summary-value">${round1(totals.fat)}g</span>
+    </div>
+  </div>`;
+
+  const rows = entries.map(e => `
+    <tr>
+      <td>${escapeHtml(formatDateLabel(e.date))}</td>
+      <td>${escapeHtml(e.name || '—')}</td>
+      <td>${e.calories != null ? round1(e.calories) : '—'}</td>
+      <td>${e.protein != null ? round1(e.protein) + 'g' : '—'}</td>
+      <td>${e.carbs != null ? round1(e.carbs) + 'g' : '—'}</td>
+      <td>${e.fat != null ? round1(e.fat) + 'g' : '—'}</td>
+      <td>${e.image ? `<button class="thumb-btn" type="button" data-action="view-image" data-entry-kind="food" data-entry-id="${e.id}" aria-label="View photo"><img src="${e.image}" class="thumb-img" alt="" /></button>` : ''}</td>
+      <td><button class="btn-icon btn-icon-edit" type="button" data-action="open-log-food" data-entry-id="${e.id}" aria-label="Edit entry">${EDIT_ICON_SVG}</button></td>
+      <td><button class="btn-icon" type="button" data-action="delete-food-entry" data-entry-id="${e.id}" aria-label="Delete entry">&times;</button></td>
+    </tr>`).join('');
+
+  const table = entries.length
+    ? `<table class="data-table"><thead><tr><th>Date</th><th>Food</th><th>Calories</th><th>Protein</th><th>Carbs</th><th>Fat</th><th></th><th></th><th></th></tr></thead><tbody>${rows}</tbody></table>`
+    : '<p class="empty-state">No food logged yet.</p>';
+
+  return `
+  <div class="page-header">
+    <div>
+      <h1>Food Tracker</h1>
+      <p class="page-subtitle">Log meals and snacks — scan a nutrition label photo or enter macros manually.</p>
+    </div>
+    <button class="btn btn-primary" type="button" data-action="open-log-food">+ Log food</button>
+  </div>
+  ${summary}
+  <section class="card">
+    <h2>History</h2>
+    ${table}
+  </section>`;
 }
 
 /* ---------- modals ---------- */
@@ -653,16 +915,16 @@ function renderLogEntryModal() {
   const goal = state.goals.find(g => g.id === ui.modalGoalId);
   if (!goal) return '';
   const editEntry = ui.modalEntryId ? goal.entries.find(e => e.id === ui.modalEntryId) : null;
+  const editValues = editEntry
+    ? (Array.isArray(editEntry.values) && editEntry.values.length ? editEntry.values : (editEntry.value != null ? [editEntry.value] : []))
+    : [];
+  const extraValueRows = editValues.slice(1).map(v => `
+    <div class="inline-form value-field-row">
+      <input type="number" name="value" step="any" value="${v}" />
+      <button type="button" class="btn-icon" data-action="remove-value-field" aria-label="Remove value">&times;</button>
+    </div>`).join('');
 
   if (goal.type === 'metric') {
-    const editValues = editEntry
-      ? (Array.isArray(editEntry.values) && editEntry.values.length ? editEntry.values : [editEntry.value])
-      : [];
-    const extraValueRows = editValues.slice(1).map(v => `
-      <div class="inline-form value-field-row">
-        <input type="number" name="value" step="any" value="${v}" />
-        <button type="button" class="btn-icon" data-action="remove-value-field" aria-label="Remove value">&times;</button>
-      </div>`).join('');
     return `
     <form data-form="log-metric-entry" data-goal-id="${goal.id}" ${editEntry ? `data-entry-id="${editEntry.id}"` : ''}>
       <h2>${editEntry ? 'Edit measurement' : 'Log a measurement'}</h2>
@@ -701,14 +963,12 @@ function renderLogEntryModal() {
     <label>Date
       <input type="date" name="date" value="${editEntry ? editEntry.date : todayStr()}" max="${todayStr()}" required />
     </label>
-    <div class="form-row">
-      <label>Attempts
-        <input type="number" name="attempts" min="0" step="1" value="${editEntry ? editEntry.attempts : 1}" required />
-      </label>
-      <label>Successes
-        <input type="number" name="successes" min="0" step="1" value="${editEntry ? editEntry.successes : 0}" required />
-      </label>
-    </div>
+    <label>Value (${escapeHtml((goal.unit || 'reps').trim())})
+      <input type="number" name="value" step="any" value="${editValues.length ? editValues[0] : ''}" required />
+    </label>
+    <div class="value-fields-wrap">${extraValueRows}</div>
+    <button type="button" class="btn btn-ghost btn-sm add-value-btn" data-action="add-value-field">+ Add another value</button>
+    <p class="field-hint">Add one value per attempt/set — the highest one becomes this entry's value.</p>
     <label>Note (optional)
       <input type="text" name="note" maxlength="140" value="${escapeHtml(editEntry ? (editEntry.note || '') : '')}" placeholder="e.g. felt strong on the transition" />
     </label>
@@ -781,6 +1041,102 @@ function renderSyncModal() {
   </form>`;
 }
 
+function renderLogBmiModal() {
+  const editEntry = ui.modalEntryId ? state.bmi.entries.find(e => e.id === ui.modalEntryId) : null;
+  return `
+  <form data-form="log-bmi-entry" ${editEntry ? `data-entry-id="${editEntry.id}"` : ''}>
+    <h2>${editEntry ? 'Edit entry' : 'Log entry'}</h2>
+    <p class="modal-subtitle">Body Fat % &amp; Weight</p>
+    <label>Date
+      <input type="date" name="date" value="${editEntry ? editEntry.date : todayStr()}" max="${todayStr()}" required />
+    </label>
+    <div class="form-row">
+      <label>Body Fat % (optional)
+        <input type="number" name="value" step="any" value="${editEntry && editEntry.value != null ? editEntry.value : ''}" />
+      </label>
+      <label>Weight, lb (optional)
+        <input type="number" name="weightLb" step="any" value="${editEntry && editEntry.weightLb != null ? editEntry.weightLb : ''}" />
+      </label>
+    </div>
+    <p class="field-hint">Enter at least one of the two. Weight is combined with your height setting to calculate BMI.</p>
+    <label>Screenshot ${editEntry && editEntry.image ? '' : '(optional)'}
+      <input type="file" name="image" accept="image/*" />
+    </label>
+    ${editEntry && editEntry.image ? `
+    <div class="edit-image-current">
+      <img src="${editEntry.image}" alt="Current screenshot" class="edit-image-preview" />
+      <label class="checkbox-row"><input type="checkbox" name="removeImage" /> Remove screenshot</label>
+    </div>` : ''}
+    <label>Note (optional)
+      <input type="text" name="note" maxlength="140" value="${escapeHtml(editEntry ? (editEntry.note || '') : '')}" placeholder="How'd it go?" />
+    </label>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" data-action="close-modal">Cancel</button>
+      <button type="submit" class="btn btn-primary">${editEntry ? 'Save changes' : 'Save'}</button>
+    </div>
+  </form>`;
+}
+
+function renderEditHeightModal() {
+  return `
+  <form data-form="edit-height">
+    <h2>Set height</h2>
+    <label>Height (inches)
+      <input type="number" name="heightIn" step="any" value="${state.bmi.heightIn != null ? state.bmi.heightIn : ''}" placeholder="e.g. 70 (5'10&quot;)" required />
+    </label>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" data-action="close-modal">Cancel</button>
+      <button type="submit" class="btn btn-primary">Save</button>
+    </div>
+  </form>`;
+}
+
+function renderLogFoodModal() {
+  const editEntry = ui.modalEntryId ? state.food.entries.find(e => e.id === ui.modalEntryId) : null;
+  return `
+  <form data-form="log-food-entry" ${editEntry ? `data-entry-id="${editEntry.id}"` : ''}>
+    <h2>${editEntry ? 'Edit food entry' : 'Log food'}</h2>
+    <label>Photo of nutrition label (optional)
+      <input type="file" name="image" id="food-image-input" accept="image/*" />
+    </label>
+    <p class="field-hint" id="food-scan-status">Pick a label photo to auto-fill the fields below, or just type them in.</p>
+    ${editEntry && editEntry.image ? `
+    <div class="edit-image-current">
+      <img src="${editEntry.image}" alt="Current photo" class="edit-image-preview" />
+      <label class="checkbox-row"><input type="checkbox" name="removeImage" /> Remove photo</label>
+    </div>` : ''}
+    <label>Date
+      <input type="date" name="date" value="${editEntry ? editEntry.date : todayStr()}" max="${todayStr()}" required />
+    </label>
+    <label>Food name (optional)
+      <input type="text" name="name" maxlength="80" value="${escapeHtml(editEntry ? (editEntry.name || '') : '')}" placeholder="e.g. Greek yogurt" />
+    </label>
+    <div class="form-row">
+      <label>Calories
+        <input type="number" name="calories" step="any" value="${editEntry && editEntry.calories != null ? editEntry.calories : ''}" />
+      </label>
+      <label>Protein (g)
+        <input type="number" name="protein" step="any" value="${editEntry && editEntry.protein != null ? editEntry.protein : ''}" />
+      </label>
+    </div>
+    <div class="form-row">
+      <label>Carbs (g)
+        <input type="number" name="carbs" step="any" value="${editEntry && editEntry.carbs != null ? editEntry.carbs : ''}" />
+      </label>
+      <label>Fat (g)
+        <input type="number" name="fat" step="any" value="${editEntry && editEntry.fat != null ? editEntry.fat : ''}" />
+      </label>
+    </div>
+    <label>Note (optional)
+      <input type="text" name="note" maxlength="140" value="${escapeHtml(editEntry ? (editEntry.note || '') : '')}" />
+    </label>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" data-action="close-modal">Cancel</button>
+      <button type="submit" class="btn btn-primary">${editEntry ? 'Save changes' : 'Save'}</button>
+    </div>
+  </form>`;
+}
+
 function renderModal() {
   if (!ui.modal) return '';
   let inner = '';
@@ -788,6 +1144,9 @@ function renderModal() {
   else if (ui.modal === 'logEntry') inner = renderLogEntryModal();
   else if (ui.modal === 'editGoal') inner = renderEditGoalModal();
   else if (ui.modal === 'sync') inner = renderSyncModal();
+  else if (ui.modal === 'logBmi') inner = renderLogBmiModal();
+  else if (ui.modal === 'editHeight') inner = renderEditHeightModal();
+  else if (ui.modal === 'logFood') inner = renderLogFoodModal();
   return `
   <div class="modal-overlay">
     <div class="modal" role="dialog" aria-modal="true">
@@ -809,14 +1168,20 @@ function renderLightbox() {
 function render() {
   const app = document.getElementById('app');
   let mainHtml;
-  const goal = ui.view === 'goal' && ui.goalId ? state.goals.find(g => g.id === ui.goalId) : null;
-  if (ui.view === 'goal' && !goal) {
-    ui.view = 'dashboard';
-    ui.goalId = null;
+  if (ui.section === 'bmi') {
+    mainHtml = renderBmiSection();
+  } else if (ui.section === 'food') {
+    mainHtml = renderFoodSection();
+  } else {
+    const goal = ui.view === 'goal' && ui.goalId ? state.goals.find(g => g.id === ui.goalId) : null;
+    if (ui.view === 'goal' && !goal) {
+      ui.view = 'dashboard';
+      ui.goalId = null;
+    }
+    mainHtml = goal ? renderGoalDetail(goal) : renderExerciseDashboard();
   }
-  mainHtml = goal ? renderGoalDetail(goal) : renderDashboard();
 
-  app.innerHTML = `<div class="app-shell">${mainHtml}</div>${renderModal()}${renderLightbox()}`;
+  app.innerHTML = `<div class="app-shell">${renderTopNav()}${mainHtml}${renderGlobalFooter()}</div>${renderModal()}${renderLightbox()}`;
 
   wireCharts();
   wireAddGoalTypeToggle();
@@ -839,7 +1204,7 @@ function wireAddGoalTypeToggle() {
   update();
 }
 
-/* ---------- action handlers ---------- */
+/* ---------- action handlers: exercise ---------- */
 
 function closeModal() {
   ui.modal = null;
@@ -877,6 +1242,7 @@ function handleAddGoal(data) {
       id: uid(),
       type: 'skill',
       name,
+      unit: (data.get('unit') || '').trim(),
       createdAt: now,
       achieved: false,
       achievedDate: null,
@@ -931,20 +1297,20 @@ function handleLogMetricEntry(goalId, data, image, entryId, removeImage) {
 function handleLogSkillEntry(goalId, data, entryId) {
   const goal = state.goals.find(g => g.id === goalId);
   if (!goal) return;
-  const attempts = Math.max(0, parseInt(data.get('attempts'), 10) || 0);
-  const successesRaw = Math.max(0, parseInt(data.get('successes'), 10) || 0);
-  const successes = Math.min(successesRaw, attempts);
+  const values = data.getAll('value').map(v => parseFloat(v)).filter(v => !isNaN(v));
+  if (!values.length) return;
+  const value = Math.max(...values);
   const date = data.get('date') || todayStr();
   const note = (data.get('note') || '').trim();
 
   const entry = entryId ? goal.entries.find(e => e.id === entryId) : null;
   if (entry) {
     entry.date = date;
-    entry.attempts = attempts;
-    entry.successes = successes;
+    entry.value = value;
+    entry.values = values;
     entry.note = note;
   } else {
-    goal.entries.push({ id: uid(), date, attempts, successes, note });
+    goal.entries.push({ id: uid(), date, value, values, note });
   }
 
   saveState();
@@ -1037,6 +1403,141 @@ function handleUnmarkAchieved(goalId) {
   render();
 }
 
+/* ---------- action handlers: BMI ---------- */
+
+function handleLogBmiEntry(data, image, entryId, removeImage) {
+  const rawValue = data.get('value');
+  const rawWeight = data.get('weightLb');
+  const value = rawValue ? parseFloat(rawValue) : null;
+  const weightLb = rawWeight ? parseFloat(rawWeight) : null;
+  if (value == null && weightLb == null) return;
+  const date = data.get('date') || todayStr();
+  const note = (data.get('note') || '').trim();
+
+  const entry = entryId ? state.bmi.entries.find(e => e.id === entryId) : null;
+  if (entry) {
+    entry.date = date;
+    entry.value = value;
+    entry.weightLb = weightLb;
+    entry.note = note;
+    if (image) entry.image = image;
+    else if (removeImage) entry.image = null;
+  } else {
+    state.bmi.entries.push({ id: uid(), date, value, weightLb, note, image: image || null });
+  }
+
+  try {
+    saveState();
+  } catch (err) {
+    const target = entry || state.bmi.entries[state.bmi.entries.length - 1];
+    target.image = null;
+    saveState();
+    alert('Entry saved, but the screenshot was too large for local storage and was not kept.');
+  }
+  ui.modal = null;
+  ui.modalEntryId = null;
+  render();
+}
+
+function handleDeleteBmiEntry(entryId) {
+  state.bmi.entries = state.bmi.entries.filter(e => e.id !== entryId);
+  saveState();
+  render();
+}
+
+function handleEditHeight(data) {
+  const heightIn = parseFloat(data.get('heightIn'));
+  if (isNaN(heightIn) || heightIn <= 0) return;
+  state.bmi.heightIn = heightIn;
+  saveState();
+  ui.modal = null;
+  render();
+}
+
+/* ---------- action handlers: food ---------- */
+
+function handleLogFoodEntry(data, image, entryId, removeImage) {
+  const date = data.get('date') || todayStr();
+  const name = (data.get('name') || '').trim();
+  const num = (key) => {
+    const raw = data.get(key);
+    return raw ? parseFloat(raw) : null;
+  };
+  const calories = num('calories');
+  const protein = num('protein');
+  const carbs = num('carbs');
+  const fat = num('fat');
+  const note = (data.get('note') || '').trim();
+
+  const entry = entryId ? state.food.entries.find(e => e.id === entryId) : null;
+  if (entry) {
+    entry.date = date;
+    entry.name = name;
+    entry.calories = calories;
+    entry.protein = protein;
+    entry.carbs = carbs;
+    entry.fat = fat;
+    entry.note = note;
+    if (image) entry.image = image;
+    else if (removeImage) entry.image = null;
+  } else {
+    state.food.entries.push({ id: uid(), date, name, calories, protein, carbs, fat, note, image: image || null });
+  }
+
+  try {
+    saveState();
+  } catch (err) {
+    const target = entry || state.food.entries[state.food.entries.length - 1];
+    target.image = null;
+    saveState();
+    alert('Entry saved, but the photo was too large for local storage and was not kept.');
+  }
+  ui.modal = null;
+  ui.modalEntryId = null;
+  render();
+}
+
+function handleDeleteFoodEntry(entryId) {
+  state.food.entries = state.food.entries.filter(e => e.id !== entryId);
+  saveState();
+  render();
+}
+
+async function handleScanFoodPhoto(file) {
+  const statusEl = document.getElementById('food-scan-status');
+  if (statusEl) statusEl.textContent = 'Scanning label…';
+  try {
+    const dataUrl = await resizeImageToDataUrl(file, 1200, 0.85);
+    const res = await fetch('/api/scan-food', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: dataUrl })
+    });
+    if (!res.ok) throw new Error('Scan failed with status ' + res.status);
+    const result = await res.json();
+    const setIfPresent = (name, val) => {
+      if (val == null) return;
+      const el = document.querySelector(`[name="${name}"]`);
+      if (el) el.value = val;
+    };
+    setIfPresent('name', result.name);
+    setIfPresent('calories', result.calories);
+    setIfPresent('protein', result.protein);
+    setIfPresent('carbs', result.carbs);
+    setIfPresent('fat', result.fat);
+    if (statusEl) {
+      statusEl.textContent = (result.calories == null && result.protein == null)
+        ? "Couldn't read numbers off that photo — enter the values manually below."
+        : 'Scanned — double check the numbers below before saving.';
+    }
+  } catch (err) {
+    console.error('Food scan failed', err);
+    if (statusEl) statusEl.textContent = "Couldn't reach the scanner — enter the values manually below.";
+  }
+}
+
+/* ---------- action handlers: data / sync ---------- */
+
 function handleExportData() {
   const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -1057,9 +1558,9 @@ function handleImportFile(file) {
       const parsed = JSON.parse(reader.result);
       if (!parsed || !Array.isArray(parsed.goals)) throw new Error('missing "goals" array');
       if (!confirm('Import this file? It will replace all current data.')) return;
-      state = parsed;
+      state = migrateState(parsed);
       saveState();
-      ui = { view: 'dashboard', goalId: null, modal: null, modalGoalId: null, modalEntryId: null, lightboxImage: null };
+      ui = { section: 'exercise', view: 'dashboard', goalId: null, modal: null, modalGoalId: null, modalEntryId: null, lightboxImage: null };
       render();
     } catch (err) {
       alert('Could not import that file: ' + err.message);
@@ -1072,7 +1573,7 @@ function handleResetData() {
   if (!confirm('This will erase all goals and history and restore the defaults. Continue?')) return;
   state = defaultState();
   saveState();
-  ui = { view: 'dashboard', goalId: null, modal: null, modalGoalId: null, modalEntryId: null, lightboxImage: null };
+  ui = { section: 'exercise', view: 'dashboard', goalId: null, modal: null, modalGoalId: null, modalEntryId: null, lightboxImage: null };
   render();
 }
 
@@ -1095,7 +1596,7 @@ async function handleLinkSyncCode(rawCode) {
   setSyncCode(code);
   const remote = await pullSync(code);
   if (remote && remote.data) {
-    state = remote.data;
+    state = migrateState(remote.data);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } else {
     await pushSync();
@@ -1118,6 +1619,12 @@ function onAppClick(e) {
   const goalId = actionEl.dataset.goalId;
 
   switch (action) {
+    case 'show-section':
+      ui.section = actionEl.dataset.section;
+      ui.view = 'dashboard';
+      ui.goalId = null;
+      render();
+      break;
     case 'show-dashboard':
       ui.view = 'dashboard'; ui.goalId = null; render(); break;
     case 'show-goal':
@@ -1139,6 +1646,16 @@ function onAppClick(e) {
       if (code && navigator.clipboard) navigator.clipboard.writeText(code);
       break;
     }
+    case 'open-log-bmi':
+      ui.modal = 'logBmi'; ui.modalEntryId = actionEl.dataset.entryId || null; render(); break;
+    case 'delete-bmi-entry':
+      handleDeleteBmiEntry(actionEl.dataset.entryId); break;
+    case 'open-edit-height':
+      ui.modal = 'editHeight'; render(); break;
+    case 'open-log-food':
+      ui.modal = 'logFood'; ui.modalEntryId = actionEl.dataset.entryId || null; render(); break;
+    case 'delete-food-entry':
+      handleDeleteFoodEntry(actionEl.dataset.entryId); break;
     case 'close-modal':
       closeModal(); break;
     case 'delete-goal':
@@ -1146,8 +1663,14 @@ function onAppClick(e) {
     case 'delete-entry':
       handleDeleteEntry(goalId, actionEl.dataset.entryId); break;
     case 'view-image': {
-      const g = state.goals.find(g => g.id === goalId);
-      const entry = g && g.entries.find(en => en.id === actionEl.dataset.entryId);
+      const kind = actionEl.dataset.entryKind || 'goal';
+      let entry = null;
+      if (kind === 'bmi') entry = state.bmi.entries.find(en => en.id === actionEl.dataset.entryId);
+      else if (kind === 'food') entry = state.food.entries.find(en => en.id === actionEl.dataset.entryId);
+      else {
+        const g = state.goals.find(g => g.id === goalId);
+        entry = g && g.entries.find(en => en.id === actionEl.dataset.entryId);
+      }
       if (entry && entry.image) { ui.lightboxImage = entry.image; render(); }
       break;
     }
@@ -1221,13 +1744,48 @@ async function onAppSubmit(e) {
     case 'add-milestone': handleAddMilestone(form.dataset.goalId, data); break;
     case 'edit-goal': handleEditGoal(form.dataset.goalId, data); break;
     case 'link-sync': handleLinkSyncCode(data.get('code') || ''); break;
+    case 'log-bmi-entry': {
+      const file = data.get('image');
+      let image = null;
+      if (file && file.size > 0) {
+        try {
+          image = await resizeImageToDataUrl(file, 900, 0.8);
+        } catch (err) {
+          console.error('Failed to process screenshot', err);
+        }
+      }
+      const removeImage = data.get('removeImage') === 'on';
+      handleLogBmiEntry(data, image, form.dataset.entryId || null, removeImage);
+      break;
+    }
+    case 'edit-height': handleEditHeight(data); break;
+    case 'log-food-entry': {
+      const file = data.get('image');
+      let image = null;
+      if (file && file.size > 0) {
+        try {
+          image = await resizeImageToDataUrl(file, 900, 0.8);
+        } catch (err) {
+          console.error('Failed to process photo', err);
+        }
+      }
+      const removeImage = data.get('removeImage') === 'on';
+      handleLogFoodEntry(data, image, form.dataset.entryId || null, removeImage);
+      break;
+    }
   }
 }
 
-function onAppChange(e) {
+async function onAppChange(e) {
   if (e.target.id === 'import-file-input') {
     handleImportFile(e.target.files[0]);
     e.target.value = '';
+    return;
+  }
+  if (e.target.id === 'food-image-input') {
+    const file = e.target.files[0];
+    if (!file) return;
+    await handleScanFoodPhoto(file);
   }
 }
 
@@ -1244,7 +1802,7 @@ async function init() {
   if (code) {
     const remote = await pullSync(code);
     if (remote && remote.data && (remote.updatedAt || 0) > (state.updatedAt || 0)) {
-      state = remote.data;
+      state = migrateState(remote.data);
     }
   }
 

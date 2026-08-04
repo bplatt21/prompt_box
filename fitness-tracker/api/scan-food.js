@@ -1,0 +1,77 @@
+const Anthropic = require('@anthropic-ai/sdk');
+
+let client = null;
+function getClient() {
+  if (!client) client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  return client;
+}
+
+const SYSTEM_PROMPT = `You read nutrition facts labels from photos. Respond with ONLY a JSON object (no markdown fences, no explanation) matching this exact shape:
+{"name": string|null, "calories": number|null, "protein": number|null, "carbs": number|null, "fat": number|null}
+Use the values for ONE serving as printed on the label. "name" is your best guess at the food/product name if visible, otherwise null. If a field truly cannot be read, use null for it rather than guessing. If the image isn't a nutrition label at all, return all nulls.`;
+
+module.exports = async (req, res) => {
+  if (req.method !== 'POST') {
+    res.status(405).json({ error: 'Method not allowed' });
+    return;
+  }
+
+  if (!process.env.ANTHROPIC_API_KEY) {
+    res.status(500).json({ error: 'Server is not configured with an ANTHROPIC_API_KEY' });
+    return;
+  }
+
+  const { image } = req.body || {};
+  if (typeof image !== 'string') {
+    res.status(400).json({ error: 'Missing image' });
+    return;
+  }
+
+  const match = image.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
+  if (!match) {
+    res.status(400).json({ error: 'Expected a base64 image data URL' });
+    return;
+  }
+  const [, mediaType, base64Data] = match;
+
+  try {
+    const anthropic = getClient();
+    const message = await anthropic.messages.create({
+      model: 'claude-sonnet-5',
+      max_tokens: 300,
+      system: SYSTEM_PROMPT,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64Data } },
+          { type: 'text', text: 'Read this nutrition facts label and return the JSON.' }
+        ]
+      }]
+    });
+
+    const textBlock = message.content.find(c => c.type === 'text');
+    const text = textBlock ? textBlock.text : '{}';
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+
+    let parsed;
+    try {
+      parsed = JSON.parse(jsonMatch ? jsonMatch[0] : text);
+    } catch (parseErr) {
+      console.error('Failed to parse model output as JSON:', text);
+      res.status(502).json({ error: 'Could not parse scan result' });
+      return;
+    }
+
+    const numOrNull = (v) => (typeof v === 'number' && !isNaN(v) ? v : null);
+    res.status(200).json({
+      name: typeof parsed.name === 'string' ? parsed.name : null,
+      calories: numOrNull(parsed.calories),
+      protein: numOrNull(parsed.protein),
+      carbs: numOrNull(parsed.carbs),
+      fat: numOrNull(parsed.fat)
+    });
+  } catch (err) {
+    console.error('Food scan error', err);
+    res.status(500).json({ error: 'Scan failed' });
+  }
+};
