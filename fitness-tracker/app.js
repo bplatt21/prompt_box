@@ -411,17 +411,20 @@ function renderMetricDetail(goal) {
   </div>
   ${renderMeter(pct, achieved, achieved ? 'Goal reached' : `${pct}% to goal`)}`;
 
+  const hasAttempts = entries.some(e => e.attempts != null);
+
   const rows = entries.map(e => `
     <tr>
       <td>${escapeHtml(formatDateLabel(e.date))}</td>
       <td>${e.value}${unit}</td>
+      ${hasAttempts ? `<td>${e.attempts != null ? e.attempts : ''}</td>` : ''}
       <td>${escapeHtml(e.note || '')}</td>
       <td>${e.image ? `<button class="thumb-btn" type="button" data-action="view-image" data-goal-id="${goal.id}" data-entry-id="${e.id}" aria-label="View screenshot"><img src="${e.image}" class="thumb-img" alt="" /></button>` : ''}</td>
       <td><button class="btn-icon" type="button" data-action="delete-entry" data-goal-id="${goal.id}" data-entry-id="${e.id}" aria-label="Delete entry">&times;</button></td>
     </tr>`).join('');
 
   const table = entries.length
-    ? `<table class="data-table"><thead><tr><th>Date</th><th>Value</th><th>Note</th><th></th><th></th></tr></thead><tbody>${rows}</tbody></table>`
+    ? `<table class="data-table"><thead><tr><th>Date</th><th>Value</th>${hasAttempts ? '<th>Attempts</th>' : ''}<th>Note</th><th></th><th></th></tr></thead><tbody>${rows}</tbody></table>`
     : '<p class="empty-state">No entries yet.</p>';
 
   return `
@@ -578,9 +581,14 @@ function renderLogEntryModal() {
       <label>Date
         <input type="date" name="date" value="${todayStr()}" max="${todayStr()}" required />
       </label>
-      <label>Value (${escapeHtml(goal.unit || 'unit')})
-        <input type="number" name="value" step="any" required />
-      </label>
+      <div class="form-row">
+        <label>Value (${escapeHtml(goal.unit || 'unit')})
+          <input type="number" name="value" step="any" required />
+        </label>
+        <label>Attempts (optional)
+          <input type="number" name="attempts" min="1" step="1" placeholder="e.g. 3 sets" />
+        </label>
+      </div>
       <label>Screenshot (optional)
         <input type="file" name="image" accept="image/*" />
       </label>
@@ -766,8 +774,9 @@ function handleLogMetricEntry(goalId, data, image) {
   const value = parseFloat(data.get('value'));
   if (isNaN(value)) return;
   const date = data.get('date') || todayStr();
-  goal.entries = goal.entries.filter(e => e.date !== date);
-  goal.entries.push({ id: uid(), date, value, note: (data.get('note') || '').trim(), image: image || null });
+  const attemptsRaw = parseInt(data.get('attempts'), 10);
+  const attempts = Number.isFinite(attemptsRaw) && attemptsRaw > 0 ? attemptsRaw : null;
+  goal.entries.push({ id: uid(), date, value, attempts, note: (data.get('note') || '').trim(), image: image || null });
   try {
     saveState();
   } catch (err) {

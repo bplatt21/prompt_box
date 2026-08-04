@@ -33,7 +33,11 @@ from inside `fitness-tracker/`.
   either type. This is how "more goals to follow" is meant to be handled going
   forward.
 - Each metric goal gets a trend chart (hover for a tooltip) plotted against
-  its target, plus a full history table.
+  its target, plus a full history table. You can log as many entries as you
+  want per day (e.g. an AM and PM session) — nothing gets overwritten.
+- Metric entries can optionally record **attempts** (e.g. it took 3 sets to
+  hit that rep total) alongside the value. The history table only shows an
+  Attempts column for goals where you've actually used it.
 - When logging a measurement for a metric goal, you can optionally attach a
   screenshot (e.g. a scale or scan reading) — it's resized and compressed in
   the browser before saving, and shows as a thumbnail in the history table
