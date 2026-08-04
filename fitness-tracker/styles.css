@@ -550,6 +550,39 @@ button, input, select, textarea {
   width: 1%;
 }
 
+.day-group-row th {
+  padding-top: 24px;
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 15px;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.data-table tbody tr.day-group-row:first-child th {
+  padding-top: 0;
+}
+
+.day-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.day-group-total {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.meal-group-row th {
+  padding-top: 14px;
+  padding-bottom: 2px;
+  border-bottom: none;
+}
+
 /* ---------- milestones ---------- */
 
 .milestone-list {
@@ -829,5 +862,12 @@ form textarea {
   .thumb-btn {
     width: 44px;
     height: 44px;
+  }
+
+  .day-group-header {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    max-width: calc(100vw - 76px);
   }
 }

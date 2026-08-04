@@ -832,9 +832,8 @@ function renderFoodSection() {
     </div>
   </div>`;
 
-  const rows = entries.map(e => `
+  const entryRow = (e) => `
     <tr>
-      <td>${escapeHtml(formatDateLabel(e.date))}</td>
       <td>${escapeHtml(e.name || '—')}</td>
       <td>${e.calories != null ? round1(e.calories) : '—'}</td>
       <td>${e.protein != null ? round1(e.protein) + 'g' : '—'}</td>
@@ -844,10 +843,30 @@ function renderFoodSection() {
       <td>${e.image ? `<button class="thumb-btn" type="button" data-action="view-image" data-entry-kind="food" data-entry-id="${e.id}" aria-label="View photo"><img src="${e.image}" class="thumb-img" alt="" /></button>` : ''}</td>
       <td><button class="btn-icon btn-icon-edit" type="button" data-action="open-log-food" data-entry-id="${e.id}" aria-label="Edit entry">${EDIT_ICON_SVG}</button></td>
       <td><button class="btn-icon" type="button" data-action="delete-food-entry" data-entry-id="${e.id}" aria-label="Delete entry">&times;</button></td>
-    </tr>`).join('');
+    </tr>`;
+
+  const dates = [...new Set(entries.map(e => e.date))];
+
+  const rows = dates.map(date => {
+    const dayEntries = entries.filter(e => e.date === date);
+    const dayTotals = foodTotalsForDate(date);
+    const dayTotalsText = `${round1(dayTotals.calories)} cal · ${round1(dayTotals.protein)}g protein · ${round1(dayTotals.carbs)}g carbs · ${round1(dayTotals.fat)}g fat${dayTotals.creatine ? ' · ' + round1(dayTotals.creatine) + 'g creatine' : ''}`;
+    const dayHeader = `<tr class="day-group-row"><th colspan="9"><div class="day-group-header"><span class="day-group-date">${escapeHtml(formatDateLabel(date))}</span><span class="day-group-total">${escapeHtml(dayTotalsText)}</span></div></th></tr>`;
+
+    const groups = MEAL_ORDER.map(key => ({ key, label: MEAL_LABELS[key], items: dayEntries.filter(e => e.meal === key) })).filter(g => g.items.length);
+    const unlabeled = dayEntries.filter(e => !MEAL_ORDER.includes(e.meal));
+    if (unlabeled.length) groups.push({ key: 'other', label: groups.length ? 'Other' : null, items: unlabeled });
+
+    const groupRows = groups.map(g =>
+      (g.label ? `<tr class="meal-group-row"><th colspan="9">${escapeHtml(g.label)}</th></tr>` : '') +
+      g.items.map(entryRow).join('')
+    ).join('');
+
+    return dayHeader + groupRows;
+  }).join('');
 
   const table = entries.length
-    ? `<div class="table-scroll"><table class="data-table"><thead><tr><th>Date</th><th>Food</th><th>Calories</th><th>Protein</th><th>Carbs</th><th>Fat</th><th>Creatine</th><th></th><th></th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
+    ? `<div class="table-scroll"><table class="data-table"><thead><tr><th>Food</th><th>Calories</th><th>Protein</th><th>Carbs</th><th>Fat</th><th>Creatine</th><th></th><th></th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
     : '<p class="empty-state">No food logged yet.</p>';
 
   return `
@@ -1084,6 +1103,12 @@ function renderLogFoodModal() {
     </label>
     <label>Food name (optional)
       <input type="text" name="name" maxlength="80" value="${escapeHtml(editEntry ? (editEntry.name || '') : '')}" placeholder="e.g. Greek yogurt" />
+    </label>
+    <label>Meal (optional)
+      <select name="meal">
+        <option value="">— No meal —</option>
+        ${MEAL_ORDER.map(key => `<option value="${key}" ${editEntry && editEntry.meal === key ? 'selected' : ''}>${MEAL_LABELS[key]}</option>`).join('')}
+      </select>
     </label>
     <label>Servings
       <input type="number" name="servings" step="any" min="0" value="1" />
@@ -1439,6 +1464,8 @@ function handleEditHeight(data) {
 /* ---------- action handlers: food ---------- */
 
 const FOOD_MACRO_FIELDS = ['calories', 'protein', 'carbs', 'fat', 'creatine'];
+const MEAL_ORDER = ['breakfast', 'lunch', 'dinner'];
+const MEAL_LABELS = { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner' };
 let foodServingsBaseline = {};
 
 function currentServingsValue() {
@@ -1459,6 +1486,7 @@ function handleLogFoodEntry(data, image, entryId, removeImage) {
   const carbs = num('carbs');
   const fat = num('fat');
   const creatine = num('creatine');
+  const meal = data.get('meal') || null;
   const note = (data.get('note') || '').trim();
 
   const entry = entryId ? state.food.entries.find(e => e.id === entryId) : null;
@@ -1470,11 +1498,12 @@ function handleLogFoodEntry(data, image, entryId, removeImage) {
     entry.carbs = carbs;
     entry.fat = fat;
     entry.creatine = creatine;
+    entry.meal = meal;
     entry.note = note;
     if (image) entry.image = image;
     else if (removeImage) entry.image = null;
   } else {
-    state.food.entries.push({ id: uid(), date, name, calories, protein, carbs, fat, creatine, note, image: image || null });
+    state.food.entries.push({ id: uid(), date, name, calories, protein, carbs, fat, creatine, meal, note, image: image || null });
   }
 
   try {

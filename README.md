@@ -63,10 +63,14 @@ in the app works fine without it.
   numbers) describe; works whether the starting numbers came from a scan or
   manual entry, and re-scales correctly if you change it more than once or
   hand-correct a field afterward. It's a form-only convenience — only the
-  final scaled numbers get saved on the entry. Shows today's totals at the
-  top, a Trend chart tracking daily protein against a 170g/day goal (each bar
-  is one day, split into a colored segment per meal logged that day, with a
-  dashed goal line), and a full history below.
+  final scaled numbers get saved on the entry. Each entry can also be
+  optionally labeled Breakfast/Lunch/Dinner. Shows today's totals at the top,
+  a Trend chart tracking daily protein against a 170g/day goal (each bar is
+  one day, split into a colored segment per meal logged that day, with a
+  dashed goal line), and a history grouped by day, then by meal within each
+  day (unlabeled entries land in an "Other" group, unless a day has no
+  labeled entries at all, in which case it's just shown as a flat list) —
+  each day's header shows that day's totals across every meal.
 
 ### Shared entry features (BMI, Exercise, Food)
 
