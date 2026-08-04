@@ -29,6 +29,7 @@ function nowTimeStr() {
 }
 
 const EDIT_ICON_SVG = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M11.5 2.5l2 2-7.5 7.5H4v-2l7.5-7.5z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"/></svg>';
+const DUPLICATE_ICON_SVG = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M3.5 10.5v-6a1 1 0 0 1 1-1h6" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>';
 
 function formatDateLabel(dateStr) {
   const d = new Date(dateStr + 'T00:00:00');
@@ -863,7 +864,8 @@ function renderFoodSection() {
       <td>${e.fat != null ? round1(e.fat) + 'g' : '—'}</td>
       <td>${e.creatine != null ? round1(e.creatine) + 'g' : '—'}</td>
       <td>${e.image ? `<button class="thumb-btn" type="button" data-action="view-image" data-entry-kind="food" data-entry-id="${e.id}" aria-label="View photo"><img src="${e.image}" class="thumb-img" alt="" /></button>` : ''}</td>
-      <td><button class="btn-icon btn-icon-edit" type="button" data-action="open-log-food" data-entry-id="${e.id}" aria-label="Edit entry">${EDIT_ICON_SVG}</button></td>
+      <td class="td-icon"><button class="btn-icon btn-icon-edit" type="button" data-action="open-log-food" data-entry-id="${e.id}" aria-label="Edit entry">${EDIT_ICON_SVG}</button></td>
+      <td class="td-icon"><button class="btn-icon btn-icon-edit" type="button" data-action="duplicate-food-entry" data-entry-id="${e.id}" aria-label="Duplicate entry">${DUPLICATE_ICON_SVG}</button></td>
       <td><button class="btn-icon" type="button" data-action="delete-food-entry" data-entry-id="${e.id}" aria-label="Delete entry">&times;</button></td>
     </tr>`;
 
@@ -878,14 +880,14 @@ function renderFoodSection() {
     });
     const dayTotals = foodTotalsForDate(date);
     const dayTotalsText = `${round1(dayTotals.calories)} cal · ${round1(dayTotals.protein)}g protein · ${round1(dayTotals.carbs)}g carbs · ${round1(dayTotals.fat)}g fat${dayTotals.creatine ? ' · ' + round1(dayTotals.creatine) + 'g creatine' : ''}`;
-    const dayHeader = `<tr class="day-group-row"><th colspan="10"><div class="day-group-header"><span class="day-group-date">${escapeHtml(formatDateLabel(date))}</span><span class="day-group-total">${escapeHtml(dayTotalsText)}</span></div></th></tr>`;
+    const dayHeader = `<tr class="day-group-row"><th colspan="11"><div class="day-group-header"><span class="day-group-date">${escapeHtml(formatDateLabel(date))}</span><span class="day-group-total">${escapeHtml(dayTotalsText)}</span></div></th></tr>`;
 
     const groups = MEAL_ORDER.map(key => ({ key, label: MEAL_LABELS[key], items: dayEntries.filter(e => e.meal === key) })).filter(g => g.items.length);
     const unlabeled = dayEntries.filter(e => !MEAL_ORDER.includes(e.meal));
     if (unlabeled.length) groups.push({ key: 'other', label: groups.length ? 'Other' : null, items: unlabeled });
 
     const groupRows = groups.map(g =>
-      (g.label ? `<tr class="meal-group-row"><th colspan="10">${escapeHtml(g.label)}</th></tr>` : '') +
+      (g.label ? `<tr class="meal-group-row"><th colspan="11">${escapeHtml(g.label)}</th></tr>` : '') +
       g.items.map(entryRow).join('')
     ).join('');
 
@@ -893,7 +895,7 @@ function renderFoodSection() {
   }).join('');
 
   const table = entries.length
-    ? `<div class="table-scroll"><table class="data-table"><thead><tr><th>Time</th><th>Food</th><th>Calories</th><th>Protein</th><th>Carbs</th><th>Fat</th><th>Creatine</th><th></th><th></th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
+    ? `<div class="table-scroll"><table class="data-table"><thead><tr><th>Time</th><th>Food</th><th>Calories</th><th>Protein</th><th>Carbs</th><th>Fat</th><th>Creatine</th><th></th><th></th><th></th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
     : '<p class="empty-state">No food logged yet.</p>';
 
   return `
@@ -1569,6 +1571,27 @@ function handleDeleteFoodEntry(entryId) {
   render();
 }
 
+function handleDuplicateFoodEntry(entryId) {
+  const source = state.food.entries.find(e => e.id === entryId);
+  if (!source) return;
+  state.food.entries.push({
+    id: uid(),
+    date: todayStr(),
+    time: nowTimeStr(),
+    name: source.name,
+    calories: source.calories,
+    protein: source.protein,
+    carbs: source.carbs,
+    fat: source.fat,
+    creatine: source.creatine,
+    meal: source.meal,
+    note: '',
+    image: null
+  });
+  saveState();
+  render();
+}
+
 async function handleScanFoodPhoto(file) {
   const statusEl = document.getElementById('food-scan-status');
   const modeEl = document.getElementById('food-photo-mode');
@@ -1716,6 +1739,8 @@ function onAppClick(e) {
       ui.modal = 'logFood'; ui.modalEntryId = actionEl.dataset.entryId || null; render(); break;
     case 'delete-food-entry':
       handleDeleteFoodEntry(actionEl.dataset.entryId); break;
+    case 'duplicate-food-entry':
+      handleDuplicateFoodEntry(actionEl.dataset.entryId); break;
     case 'close-modal':
       closeModal(); break;
     case 'delete-goal':

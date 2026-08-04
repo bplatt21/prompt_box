@@ -103,6 +103,11 @@ in the app works fine without it.
   date as plain text instead of a date picker, since editing is for
   correcting/appending values on that same day — the date field only shows
   up when logging a brand-new entry.
+- **Duplicating**: Food Tracker rows have a copy icon next to Edit for
+  quickly re-logging something you eat often. It copies the name and macros
+  (calories/protein/carbs/fat/creatine) and meal label into a new entry dated
+  today at the current time — note and photo are left blank/unset rather
+  than carried over, and the original entry is untouched.
 
 ### Data
 

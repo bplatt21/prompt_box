@@ -545,7 +545,8 @@ button, input, select, textarea {
 }
 
 .data-table td:last-child,
-.data-table td:nth-last-child(2) {
+.data-table td:nth-last-child(2),
+.data-table td.td-icon {
   text-align: right;
   width: 1%;
 }
