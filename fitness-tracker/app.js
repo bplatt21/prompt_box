@@ -70,6 +70,7 @@ function defaultState() {
   const now = new Date().toISOString();
   return {
     seededPushups: true,
+    seededPlank: true,
     bmi: { heightIn: null, entries: [] },
     food: { entries: [] },
     goals: [
@@ -101,6 +102,16 @@ function defaultState() {
         target: 50,
         createdAt: now,
         entries: []
+      },
+      {
+        id: uid(),
+        type: 'metric',
+        name: 'Plank',
+        unit: ' sec',
+        direction: 'increase',
+        target: 60,
+        createdAt: now,
+        entries: []
       }
     ]
   };
@@ -119,6 +130,20 @@ function migrateState(parsed) {
       entries: []
     });
     parsed.seededPushups = true;
+  }
+
+  if (!parsed.seededPlank) {
+    parsed.goals.push({
+      id: uid(),
+      type: 'metric',
+      name: 'Plank',
+      unit: ' sec',
+      direction: 'increase',
+      target: 60,
+      createdAt: new Date().toISOString(),
+      entries: []
+    });
+    parsed.seededPlank = true;
   }
 
   if (!parsed.bmi) {

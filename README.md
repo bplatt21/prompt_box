@@ -43,8 +43,9 @@ in the app works fine without it.
   local) storage space of the compressed image.
 - **Exercise** — goal-based tracking, same system as before:
   - **Metric goals** — a number to hit, with a direction (go up or down to a
-    target). Push-ups (target 50 reps) is seeded by default. Use this type
-    for anything numeric: weight, a lift number, a race time, rep maxes, etc.
+    target). Push-ups (target 50 reps) and Plank (target 60 sec) are seeded
+    by default. Use this type for anything numeric: weight, a lift number, a
+    race time, rep maxes, hold times, etc.
   - **Skill goals** — a milestone checklist plus a practice-session log, for
     feats that aren't a single number. Muscle-Up is seeded by default with a
     standard calisthenics progression and a "mark as achieved" button for the
