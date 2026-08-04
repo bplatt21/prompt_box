@@ -7,8 +7,8 @@ function getClient() {
 }
 
 const SYSTEM_PROMPT = `You read nutrition facts labels from photos. Respond with ONLY a JSON object (no markdown fences, no explanation) matching this exact shape:
-{"name": string|null, "calories": number|null, "protein": number|null, "carbs": number|null, "fat": number|null}
-Use the values for ONE serving as printed on the label. "name" is your best guess at the food/product name if visible, otherwise null. If a field truly cannot be read, use null for it rather than guessing. If the image isn't a nutrition label at all, return all nulls.`;
+{"name": string|null, "calories": number|null, "protein": number|null, "carbs": number|null, "fat": number|null, "creatine": number|null}
+Use the values for ONE serving as printed on the label. "name" is your best guess at the food/product name if visible, otherwise null. "creatine" is grams of creatine (e.g. creatine monohydrate) per serving — most food labels won't list this, so leave it null unless the label explicitly shows a creatine amount (common on supplement tubs). If a field truly cannot be read, use null for it rather than guessing. If the image isn't a nutrition label at all, return all nulls.`;
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
@@ -68,7 +68,8 @@ module.exports = async (req, res) => {
       calories: numOrNull(parsed.calories),
       protein: numOrNull(parsed.protein),
       carbs: numOrNull(parsed.carbs),
-      fat: numOrNull(parsed.fat)
+      fat: numOrNull(parsed.fat),
+      creatine: numOrNull(parsed.creatine)
     });
   } catch (err) {
     console.error('Food scan error', err);

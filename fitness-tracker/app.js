@@ -279,8 +279,9 @@ function foodTotalsForDate(dateStr) {
       acc.protein += e.protein || 0;
       acc.carbs += e.carbs || 0;
       acc.fat += e.fat || 0;
+      acc.creatine += e.creatine || 0;
       return acc;
-    }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
+    }, { calories: 0, protein: 0, carbs: 0, fat: 0, creatine: 0 });
 }
 
 /* ---------- chart (stacked bar chart: each attempt is a colored segment + target reference) ---------- */
@@ -786,6 +787,10 @@ function renderFoodSection() {
       <span class="summary-label">Fat today</span>
       <span class="summary-value">${round1(totals.fat)}g</span>
     </div>
+    <div class="summary-tile">
+      <span class="summary-label">Creatine today</span>
+      <span class="summary-value">${round1(totals.creatine)}g</span>
+    </div>
   </div>`;
 
   const rows = entries.map(e => `
@@ -796,13 +801,14 @@ function renderFoodSection() {
       <td>${e.protein != null ? round1(e.protein) + 'g' : '—'}</td>
       <td>${e.carbs != null ? round1(e.carbs) + 'g' : '—'}</td>
       <td>${e.fat != null ? round1(e.fat) + 'g' : '—'}</td>
+      <td>${e.creatine != null ? round1(e.creatine) + 'g' : '—'}</td>
       <td>${e.image ? `<button class="thumb-btn" type="button" data-action="view-image" data-entry-kind="food" data-entry-id="${e.id}" aria-label="View photo"><img src="${e.image}" class="thumb-img" alt="" /></button>` : ''}</td>
       <td><button class="btn-icon btn-icon-edit" type="button" data-action="open-log-food" data-entry-id="${e.id}" aria-label="Edit entry">${EDIT_ICON_SVG}</button></td>
       <td><button class="btn-icon" type="button" data-action="delete-food-entry" data-entry-id="${e.id}" aria-label="Delete entry">&times;</button></td>
     </tr>`).join('');
 
   const table = entries.length
-    ? `<table class="data-table"><thead><tr><th>Date</th><th>Food</th><th>Calories</th><th>Protein</th><th>Carbs</th><th>Fat</th><th></th><th></th><th></th></tr></thead><tbody>${rows}</tbody></table>`
+    ? `<table class="data-table"><thead><tr><th>Date</th><th>Food</th><th>Calories</th><th>Protein</th><th>Carbs</th><th>Fat</th><th>Creatine</th><th></th><th></th><th></th></tr></thead><tbody>${rows}</tbody></table>`
     : '<p class="empty-state">No food logged yet.</p>';
 
   return `
@@ -1049,6 +1055,11 @@ function renderLogFoodModal() {
       </label>
       <label>Fat (g)
         <input type="number" name="fat" step="any" value="${editEntry && editEntry.fat != null ? editEntry.fat : ''}" />
+      </label>
+    </div>
+    <div class="form-row">
+      <label>Creatine (g)
+        <input type="number" name="creatine" step="any" value="${editEntry && editEntry.creatine != null ? editEntry.creatine : ''}" />
       </label>
     </div>
     <label>Note (optional)
@@ -1390,6 +1401,7 @@ function handleLogFoodEntry(data, image, entryId, removeImage) {
   const protein = num('protein');
   const carbs = num('carbs');
   const fat = num('fat');
+  const creatine = num('creatine');
   const note = (data.get('note') || '').trim();
 
   const entry = entryId ? state.food.entries.find(e => e.id === entryId) : null;
@@ -1400,11 +1412,12 @@ function handleLogFoodEntry(data, image, entryId, removeImage) {
     entry.protein = protein;
     entry.carbs = carbs;
     entry.fat = fat;
+    entry.creatine = creatine;
     entry.note = note;
     if (image) entry.image = image;
     else if (removeImage) entry.image = null;
   } else {
-    state.food.entries.push({ id: uid(), date, name, calories, protein, carbs, fat, note, image: image || null });
+    state.food.entries.push({ id: uid(), date, name, calories, protein, carbs, fat, creatine, note, image: image || null });
   }
 
   try {
@@ -1448,6 +1461,7 @@ async function handleScanFoodPhoto(file) {
     setIfPresent('protein', result.protein);
     setIfPresent('carbs', result.carbs);
     setIfPresent('fat', result.fat);
+    setIfPresent('creatine', result.creatine);
     if (statusEl) {
       statusEl.textContent = (result.calories == null && result.protein == null)
         ? "Couldn't read numbers off that photo — enter the values manually below."

@@ -52,10 +52,11 @@ in the app works fine without it.
     same multi-value/stacked-bar-chart treatment as metric goals) rather than
     an attempts/successes count.
   - Click "+ Add goal" to add more of either type.
-- **Food Tracker** — log food/meals with calories, protein, carbs, and fat.
-  Optionally attach a photo of a nutrition label — it's sent to an AI vision
-  model (`fitness-tracker/api/scan-food.js`, using `ANTHROPIC_API_KEY`) that
-  reads the label and auto-fills the macro fields, which you can still edit
+- **Food Tracker** — log food/meals with calories, protein, carbs, fat, and
+  creatine (g). Optionally attach a photo of a nutrition label — it's sent to
+  an AI vision model (`fitness-tracker/api/scan-food.js`, using
+  `ANTHROPIC_API_KEY`) that reads the label and auto-fills the macro fields
+  (creatine included, for supplement labels that list it), which you can still edit
   before saving. Shows today's totals at the top and a full history below.
 
 ### Shared entry features (BMI, Exercise, Food)
