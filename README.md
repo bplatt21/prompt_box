@@ -99,7 +99,10 @@ in the app works fine without it.
   log form pre-filled with that entry's data and save changes in place,
   instead of deleting and re-logging. Leaving a file picker empty on edit
   keeps the current image — check "Remove screenshot"/"Remove photo" to
-  clear it.
+  clear it. On Exercise goal entries specifically, editing shows the entry's
+  date as plain text instead of a date picker, since editing is for
+  correcting/appending values on that same day — the date field only shows
+  up when logging a brand-new entry.
 
 ### Data
 

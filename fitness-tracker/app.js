@@ -977,9 +977,11 @@ function renderLogEntryModal() {
     <form data-form="log-metric-entry" data-goal-id="${goal.id}" ${editEntry ? `data-entry-id="${editEntry.id}"` : ''}>
       <h2>${editEntry ? 'Edit measurement' : 'Log a measurement'}</h2>
       <p class="modal-subtitle">${escapeHtml(goal.name)}</p>
-      <label>Date
-        <input type="date" name="date" value="${editEntry ? editEntry.date : todayStr()}" max="${todayStr()}" required />
-      </label>
+      ${editEntry
+        ? `<p class="field-hint">Editing entry for ${escapeHtml(formatDateLabel(editEntry.date))}</p>`
+        : `<label>Date
+        <input type="date" name="date" value="${todayStr()}" max="${todayStr()}" required />
+      </label>`}
       <label>Value (${escapeHtml((goal.unit || 'unit').trim())})
         <input type="number" name="value" step="any" value="${editValues.length ? editValues[0] : ''}" required />
       </label>
@@ -1008,9 +1010,11 @@ function renderLogEntryModal() {
   <form data-form="log-skill-entry" data-goal-id="${goal.id}" ${editEntry ? `data-entry-id="${editEntry.id}"` : ''}>
     <h2>${editEntry ? 'Edit practice session' : 'Log a practice session'}</h2>
     <p class="modal-subtitle">${escapeHtml(goal.name)}</p>
-    <label>Date
-      <input type="date" name="date" value="${editEntry ? editEntry.date : todayStr()}" max="${todayStr()}" required />
-    </label>
+    ${editEntry
+      ? `<p class="field-hint">Editing entry for ${escapeHtml(formatDateLabel(editEntry.date))}</p>`
+      : `<label>Date
+      <input type="date" name="date" value="${todayStr()}" max="${todayStr()}" required />
+    </label>`}
     <label>Value (${escapeHtml((goal.unit || 'reps').trim())})
       <input type="number" name="value" step="any" value="${editValues.length ? editValues[0] : ''}" required />
     </label>
@@ -1310,10 +1314,10 @@ function handleLogMetricEntry(goalId, data, image, entryId, removeImage) {
   const values = data.getAll('value').map(v => parseFloat(v)).filter(v => !isNaN(v));
   if (!values.length) return;
   const value = Math.max(...values);
-  const date = data.get('date') || todayStr();
   const note = (data.get('note') || '').trim();
 
   const entry = entryId ? goal.entries.find(e => e.id === entryId) : null;
+  const date = data.get('date') || (entry ? entry.date : todayStr());
   if (entry) {
     entry.date = date;
     entry.value = value;
@@ -1345,10 +1349,10 @@ function handleLogSkillEntry(goalId, data, entryId) {
   const values = data.getAll('value').map(v => parseFloat(v)).filter(v => !isNaN(v));
   if (!values.length) return;
   const value = Math.max(...values);
-  const date = data.get('date') || todayStr();
   const note = (data.get('note') || '').trim();
 
   const entry = entryId ? goal.entries.find(e => e.id === entryId) : null;
+  const date = data.get('date') || (entry ? entry.date : todayStr());
   if (entry) {
     entry.date = date;
     entry.value = value;
