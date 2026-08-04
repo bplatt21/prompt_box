@@ -14,6 +14,11 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+function unitSuffix(unit) {
+  const trimmed = (unit || '').trim();
+  return trimmed ? ' ' + escapeHtml(trimmed) : '';
+}
+
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -405,7 +410,7 @@ function renderChartBlock(kind, id) {
   }
   const layout = computeBarChartLayout(spec.entries, spec.target);
   const { bars, max, min } = layout;
-  const unit = escapeHtml(spec.unit || '');
+  const unit = unitSuffix(spec.unit);
   const targetLine = spec.target != null ? (() => {
     const ty = layout.yFor(spec.target);
     return `
@@ -468,7 +473,7 @@ function wireCharts() {
       tooltip.hidden = false;
       tooltip.textContent = '';
       const strong = document.createElement('strong');
-      strong.textContent = `${bar.total}${spec.unit || ''}`;
+      strong.textContent = `${bar.total}${unitSuffix(spec.unit)}`;
       tooltip.appendChild(strong);
       if (bar.breakdown) {
         const breakdown = document.createElement('span');
@@ -548,7 +553,7 @@ function renderGoalCard(goal) {
   if (goal.type === 'metric') {
     const latest = metricLatest(goal);
     valueLine = latest != null
-      ? `<div class="stat-value">${latest}${escapeHtml(goal.unit)}<span class="stat-target"> / goal ${goal.target}${escapeHtml(goal.unit)}</span></div>`
+      ? `<div class="stat-value">${latest}${unitSuffix(goal.unit)}<span class="stat-target"> / goal ${goal.target}${unitSuffix(goal.unit)}</span></div>`
       : '<div class="stat-value stat-value-empty">No entries yet</div>';
   } else {
     const done = goal.milestones.filter(m => m.done).length;
@@ -587,7 +592,7 @@ function renderMetricDetail(goal) {
   const achieved = metricAchieved(goal);
   const latest = metricLatest(goal);
   const start = metricBaseline(goal);
-  const unit = escapeHtml(goal.unit || '');
+  const unit = unitSuffix(goal.unit);
   const entries = sortedEntries(goal).reverse();
 
   const summary = `
