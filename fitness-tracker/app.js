@@ -337,8 +337,22 @@ function chartSpecForBmi() {
   return { entries: state.bmi.entries.filter(e => e.value != null), target: 10, unit: '%', name: 'Body Fat %' };
 }
 
+function foodDailyChartEntries(key) {
+  const byDate = {};
+  state.food.entries.forEach(e => {
+    if (!byDate[e.date]) byDate[e.date] = [];
+    byDate[e.date].push(e[key] || 0);
+  });
+  return Object.keys(byDate).map(date => ({ date, values: byDate[date] }));
+}
+
+function chartSpecForFoodProtein() {
+  return { entries: foodDailyChartEntries('protein'), target: 170, unit: 'g', name: 'Protein' };
+}
+
 function getChartSpec(kind, id) {
   if (kind === 'bmi') return chartSpecForBmi();
+  if (kind === 'food') return chartSpecForFoodProtein();
   const goal = state.goals.find(g => g.id === id);
   return goal ? chartSpecForGoal(goal) : null;
 }
@@ -820,6 +834,11 @@ function renderFoodSection() {
     <button class="btn btn-primary" type="button" data-action="open-log-food">+ Log food</button>
   </div>
   ${summary}
+  <section class="card">
+    <h2>Trend</h2>
+    <p class="page-subtitle">Daily protein total vs. your 170g/day goal — each bar is one day, split by the meals logged that day.</p>
+    ${renderChartBlock('food', null)}
+  </section>
   <section class="card">
     <h2>History</h2>
     ${table}
