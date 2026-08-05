@@ -91,10 +91,14 @@ in the app works fine without it.
   where you've actually logged more than one value.
 - **Multiple entries per day** are allowed — nothing gets overwritten by
   logging again the same day.
-- **Screenshots/photos**: optional on BMI and metric/skill entries, and on
-  Food entries (where a photo also triggers the label scan). Resized and
-  compressed in the browser before saving, shown as a thumbnail that opens
-  full-size on click.
+- **Screenshots/photos**: optional on BMI and metric/skill entries — resized
+  and compressed in the browser before saving, shown as a thumbnail that
+  opens full-size on click. Food entries are different: a photo there
+  (label or meal) is sent to the AI to read/estimate the macro fields, then
+  discarded — it's never saved with the entry, so Food Tracker never keeps a
+  picture around, only the numbers it read. Entries saved before this
+  changed may still show an old photo; editing one of those still lets you
+  remove it, it just won't be replaced by a new one.
 - **Editing**: click the pencil icon on any history-table row to reopen the
   log form pre-filled with that entry's data and save changes in place,
   instead of deleting and re-logging. Leaving a file picker empty on edit

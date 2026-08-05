@@ -1128,14 +1128,14 @@ function renderLogFoodModal() {
         <option value="meal">Photo of the meal itself (rough AI estimate)</option>
       </select>
     </label>
-    <label>Photo (optional)
+    <label>Photo (optional, used only to read the numbers — not saved)
       <input type="file" name="image" id="food-image-input" accept="image/*" />
     </label>
-    <p class="field-hint" id="food-scan-status">Pick a photo to auto-fill the fields below, or just type them in. A label photo is read directly; a meal photo gets a rough estimate — not a precise reading — so double-check those numbers especially.</p>
+    <p class="field-hint" id="food-scan-status">Pick a photo to auto-fill the fields below, or just type them in. A label photo is read directly; a meal photo gets a rough estimate — not a precise reading — so double-check those numbers especially. The photo itself is only sent for reading and is never saved with the entry.</p>
     ${editEntry && editEntry.image ? `
     <div class="edit-image-current">
       <img src="${editEntry.image}" alt="Current photo" class="edit-image-preview" />
-      <label class="checkbox-row"><input type="checkbox" name="removeImage" /> Remove photo</label>
+      <label class="checkbox-row"><input type="checkbox" name="removeImage" /> Remove photo (kept from before this changed)</label>
     </div>` : ''}
     <div class="form-row">
       <label>Date
@@ -1842,17 +1842,8 @@ async function onAppSubmit(e) {
     }
     case 'edit-height': handleEditHeight(data); break;
     case 'log-food-entry': {
-      const file = data.get('image');
-      let image = null;
-      if (file && file.size > 0) {
-        try {
-          image = await resizeImageToDataUrl(file, 900, 0.8);
-        } catch (err) {
-          console.error('Failed to process photo', err);
-        }
-      }
       const removeImage = data.get('removeImage') === 'on';
-      handleLogFoodEntry(data, image, form.dataset.entryId || null, removeImage);
+      handleLogFoodEntry(data, null, form.dataset.entryId || null, removeImage);
       break;
     }
   }
