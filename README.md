@@ -23,24 +23,27 @@ in the app works fine without it.
 
 ### The three sections
 
-- **BMI** — log Body Fat % and/or Weight (lb) entries, each with an optional
-  photo and note. Set your height once (inches) and the app computes BMI
+- **BMI** — log Body Fat % and/or Weight (lb), plus whatever else your smart
+  scale reports: Heart Rate, Muscle Mass, Fat-Free Body Weight, Skeletal
+  Muscle, Subcutaneous Fat, Body Water, Bone Mass, Protein, BMR, Visceral
+  Fat, and Metabolic Age — all optional, each with its own summary tile and
+  history column. Set your height once (inches) and the app computes BMI
   (`703 × weight ÷ height²`) plus the standard category (Underweight / Normal
-  / Overweight / Obese) automatically. BMI is a rough weight-and-height
-  estimate that doesn't account for muscle mass — it's shown as a
-  supplementary number alongside your actual body fat % trend, not an
-  authoritative one. There's no way to derive BMI from a photo; it always
-  needs a real weight and height — but the photo field can save you typing:
-  pick a photo of your scale or body-composition scanner display, leave the
-  "Auto-read weight/body fat % from this photo" box checked (default), and
-  `fitness-tracker/api/scan-body.js` (Claude vision) reads the weight/body
-  fat % digits shown and auto-fills those fields, still editable before
-  saving. It only reads numbers off a display — it never tries to visually
-  guess body composition from a photo of a person. If you just want to
-  attach a body/progress photo for your own reference — not a scale
-  reading — uncheck that box first: the photo still saves with the entry,
-  but it's never sent anywhere, so it costs nothing beyond the (small,
-  local) storage space of the compressed image.
+  / Overweight / Obese) itself — it never uses a value a scale reports for
+  this, so there's no chance of two conflicting BMI numbers. BMI is a rough
+  weight-and-height estimate that doesn't account for muscle mass — it's
+  shown as a supplementary number alongside your actual body fat % trend,
+  not an authoritative one. The photo field can save you typing: pick a
+  photo of your scale's results screen, leave the "Auto-read scale numbers
+  from this photo" box checked (default), and `fitness-tracker/api/scan-body.js`
+  (Claude vision) reads whichever of those numbers the screen shows and
+  auto-fills the matching fields, still editable before saving — and that
+  photo is only used to read it, never saved with the entry. It only reads
+  numbers off a display; it never tries to visually guess body composition
+  from a photo of a person. If you just want to attach a body/progress photo
+  for your own reference — not a scale reading — uncheck that box first:
+  that photo *does* save with the entry (that's the point of a reference
+  photo), but it's never sent anywhere either way.
 - **Exercise** — goal-based tracking, same system as before:
   - **Metric goals** — a number to hit, with a direction (go up or down to a
     target). Push-ups (target 50 reps) and Plank (target 60 sec) are seeded

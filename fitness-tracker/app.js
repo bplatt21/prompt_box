@@ -16,7 +16,9 @@ function escapeHtml(str) {
 
 function unitSuffix(unit) {
   const trimmed = (unit || '').trim();
-  return trimmed ? ' ' + escapeHtml(trimmed) : '';
+  if (!trimmed) return '';
+  const escaped = escapeHtml(trimmed);
+  return trimmed === '%' ? escaped : ' ' + escaped;
 }
 
 function todayStr() {
@@ -288,6 +290,20 @@ function goalStatus(goal) {
 }
 
 /* ---------- domain logic: BMI ---------- */
+
+const BMI_EXTRA_FIELDS = [
+  { key: 'heartRate', label: 'Heart Rate', unit: 'bpm' },
+  { key: 'muscleMass', label: 'Muscle Mass', unit: 'lb' },
+  { key: 'fatFreeWeight', label: 'Fat-Free Body Weight', unit: 'lb' },
+  { key: 'skeletalMuscle', label: 'Skeletal Muscle', unit: '%' },
+  { key: 'subcutaneousFat', label: 'Subcutaneous Fat', unit: '%' },
+  { key: 'bodyWater', label: 'Body Water', unit: '%' },
+  { key: 'boneMass', label: 'Bone Mass', unit: 'lb' },
+  { key: 'protein', label: 'Protein', unit: '%' },
+  { key: 'bmr', label: 'BMR', unit: 'kcal' },
+  { key: 'visceralFat', label: 'Visceral Fat', unit: '' },
+  { key: 'metabolicAge', label: 'Metabolic Age', unit: '' }
+];
 
 function sortedBmiEntries() {
   return [...state.bmi.entries].sort((a, b) => a.date.localeCompare(b.date));
@@ -783,6 +799,11 @@ function renderBmiSection() {
         <button class="btn-icon btn-icon-edit" type="button" data-action="open-edit-height" aria-label="Edit height">${EDIT_ICON_SVG}</button>
       </span>
     </div>
+    ${BMI_EXTRA_FIELDS.map(f => `
+    <div class="summary-tile">
+      <span class="summary-label">${escapeHtml(f.label)}</span>
+      <span class="summary-value">${latest && latest[f.key] != null ? latest[f.key] + unitSuffix(f.unit) : '—'}</span>
+    </div>`).join('')}
   </div>
   <p class="field-hint">BMI is a rough estimate from weight and height alone — it doesn't account for muscle mass, so treat it as a supplementary number alongside your actual body fat % readings, not an authoritative one.</p>`;
 
@@ -794,6 +815,7 @@ function renderBmiSection() {
       <td>${e.value != null ? e.value + '%' : '—'}</td>
       <td>${e.weightLb != null ? e.weightLb + ' lb' : '—'}</td>
       <td>${bmi != null ? round1(bmi) : '—'}</td>
+      ${BMI_EXTRA_FIELDS.map(f => `<td>${e[f.key] != null ? e[f.key] + unitSuffix(f.unit) : '—'}</td>`).join('')}
       <td>${escapeHtml(e.note || '')}</td>
       <td>${e.image ? `<button class="thumb-btn" type="button" data-action="view-image" data-entry-kind="bmi" data-entry-id="${e.id}" aria-label="View screenshot"><img src="${e.image}" class="thumb-img" alt="" /></button>` : ''}</td>
       <td><button class="btn-icon btn-icon-edit" type="button" data-action="open-log-bmi" data-entry-id="${e.id}" aria-label="Edit entry">${EDIT_ICON_SVG}</button></td>
@@ -802,7 +824,7 @@ function renderBmiSection() {
   }).join('');
 
   const table = entries.length
-    ? `<div class="table-scroll"><table class="data-table"><thead><tr><th>Date</th><th>Body Fat %</th><th>Weight</th><th>BMI</th><th>Note</th><th></th><th></th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
+    ? `<div class="table-scroll"><table class="data-table"><thead><tr><th>Date</th><th>Body Fat %</th><th>Weight</th><th>BMI</th>${BMI_EXTRA_FIELDS.map(f => `<th>${escapeHtml(f.label)}</th>`).join('')}<th>Note</th><th></th><th></th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
     : '<p class="empty-state">No entries yet.</p>';
 
   return `
@@ -1070,15 +1092,15 @@ function renderLogBmiModal() {
   return `
   <form data-form="log-bmi-entry" ${editEntry ? `data-entry-id="${editEntry.id}"` : ''}>
     <h2>${editEntry ? 'Edit entry' : 'Log entry'}</h2>
-    <p class="modal-subtitle">Body Fat % &amp; Weight</p>
+    <p class="modal-subtitle">Smart scale reading</p>
     <label>Date
       <input type="date" name="date" value="${editEntry ? editEntry.date : todayStr()}" max="${todayStr()}" required />
     </label>
     <label>Photo ${editEntry && editEntry.image ? '' : '(optional)'}
       <input type="file" name="image" id="bmi-image-input" accept="image/*" />
     </label>
-    <label class="checkbox-row"><input type="checkbox" name="scanPhoto" id="bmi-scan-toggle" checked /> Auto-read weight/body fat % from this photo</label>
-    <p class="field-hint" id="bmi-scan-status">For a scale/scanner display: leave the box above checked to auto-fill the fields below from the digits shown. For a body photo you just want saved for your own reference, uncheck it first — reference photos stay in your browser only and are never sent anywhere, and it never tries to estimate body composition from how you look.</p>
+    <label class="checkbox-row"><input type="checkbox" name="scanPhoto" id="bmi-scan-toggle" checked /> Auto-read scale numbers from this photo</label>
+    <p class="field-hint" id="bmi-scan-status">For a scale/scanner results screen: leave the box above checked to auto-fill the fields below from whatever numbers it shows — that photo is only used to read it and is never saved. For a body photo you just want saved for your own reference, uncheck it first — it's saved with the entry but never sent anywhere, and it never tries to estimate body composition from how you look.</p>
     ${editEntry && editEntry.image ? `
     <div class="edit-image-current">
       <img src="${editEntry.image}" alt="Current screenshot" class="edit-image-preview" />
@@ -1092,7 +1114,17 @@ function renderLogBmiModal() {
         <input type="number" name="weightLb" step="any" value="${editEntry && editEntry.weightLb != null ? editEntry.weightLb : ''}" />
       </label>
     </div>
-    <p class="field-hint">Enter at least one of the two. Weight is combined with your height setting to calculate BMI.</p>
+    ${(() => {
+      const pairs = [];
+      for (let i = 0; i < BMI_EXTRA_FIELDS.length; i += 2) pairs.push(BMI_EXTRA_FIELDS.slice(i, i + 2));
+      return pairs.map(pair => `
+    <div class="form-row">
+      ${pair.map(f => `<label>${escapeHtml(f.label)}${f.unit ? ` (${escapeHtml(f.unit)})` : ''} (optional)
+        <input type="number" name="${f.key}" step="any" value="${editEntry && editEntry[f.key] != null ? editEntry[f.key] : ''}" />
+      </label>`).join('')}
+    </div>`).join('');
+    })()}
+    <p class="field-hint">Fill in whatever your scale shows — all optional. Weight is combined with your height setting to calculate BMI.</p>
     <label>Note (optional)
       <input type="text" name="note" maxlength="140" value="${escapeHtml(editEntry ? (editEntry.note || '') : '')}" placeholder="How'd it go?" />
     </label>
@@ -1461,7 +1493,13 @@ function handleLogBmiEntry(data, image, entryId, removeImage) {
   const rawWeight = data.get('weightLb');
   const value = rawValue ? parseFloat(rawValue) : null;
   const weightLb = rawWeight ? parseFloat(rawWeight) : null;
-  if (value == null && weightLb == null) return;
+  const extras = {};
+  BMI_EXTRA_FIELDS.forEach(f => {
+    const raw = data.get(f.key);
+    extras[f.key] = raw ? parseFloat(raw) : null;
+  });
+  const hasAnyValue = value != null || weightLb != null || BMI_EXTRA_FIELDS.some(f => extras[f.key] != null);
+  if (!hasAnyValue) return;
   const date = data.get('date') || todayStr();
   const note = (data.get('note') || '').trim();
 
@@ -1470,11 +1508,12 @@ function handleLogBmiEntry(data, image, entryId, removeImage) {
     entry.date = date;
     entry.value = value;
     entry.weightLb = weightLb;
+    Object.assign(entry, extras);
     entry.note = note;
     if (image) entry.image = image;
     else if (removeImage) entry.image = null;
   } else {
-    state.bmi.entries.push({ id: uid(), date, value, weightLb, note, image: image || null });
+    state.bmi.entries.push({ id: uid(), date, value, weightLb, ...extras, note, image: image || null });
   }
 
   try {
@@ -1655,10 +1694,12 @@ async function handleScanBodyPhoto(file) {
     };
     setIfPresent('value', result.bodyFatPct);
     setIfPresent('weightLb', result.weightLb);
+    BMI_EXTRA_FIELDS.forEach(f => setIfPresent(f.key, result[f.key]));
+    const gotAnything = result.bodyFatPct != null || result.weightLb != null || BMI_EXTRA_FIELDS.some(f => result[f.key] != null);
     if (statusEl) {
-      statusEl.textContent = (result.weightLb == null && result.bodyFatPct == null)
-        ? "Couldn't read a weight or body fat % off that photo — enter the values manually below."
-        : 'Read from photo — double check the numbers below before saving.';
+      statusEl.textContent = gotAnything
+        ? 'Read from photo — double check the numbers below before saving.'
+        : "Couldn't read any numbers off that photo — enter the values manually below.";
     }
   } catch (err) {
     console.error('Body scan failed', err);
@@ -1827,9 +1868,10 @@ async function onAppSubmit(e) {
     case 'add-milestone': handleAddMilestone(form.dataset.goalId, data); break;
     case 'edit-goal': handleEditGoal(form.dataset.goalId, data); break;
     case 'log-bmi-entry': {
+      const scanPhoto = data.get('scanPhoto') === 'on';
       const file = data.get('image');
       let image = null;
-      if (file && file.size > 0) {
+      if (!scanPhoto && file && file.size > 0) {
         try {
           image = await resizeImageToDataUrl(file, 900, 0.8);
         } catch (err) {
