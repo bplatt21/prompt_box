@@ -21,6 +21,12 @@ function unitSuffix(unit) {
   return trimmed === '%' ? escaped : ' ' + escaped;
 }
 
+const WEIGHT_UNITS = ['lb', 'lbs', 'kg', 'kgs', 'kilogram', 'kilograms', 'pound', 'pounds'];
+
+function isWeightUnit(unit) {
+  return WEIGHT_UNITS.includes((unit || '').trim().toLowerCase());
+}
+
 function todayStr() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -631,12 +637,14 @@ function renderMetricDetail(goal) {
   ${renderMeter(pct, achieved, achieved ? 'Goal reached' : `${pct}% to goal`)}`;
 
   const hasBreakdown = entries.some(e => Array.isArray(e.values) && e.values.length > 1);
+  const showReps = isWeightUnit(goal.unit);
 
   const rows = entries.map(e => `
     <tr>
       <td>${escapeHtml(formatDateLabel(e.date))}</td>
       <td>${e.value}${unit}</td>
       ${hasBreakdown ? `<td>${Array.isArray(e.values) && e.values.length > 1 ? escapeHtml(e.values.join(' + ')) : ''}</td>` : ''}
+      ${showReps ? `<td>${e.reps != null ? e.reps : '—'}</td>` : ''}
       <td>${escapeHtml(e.note || '')}</td>
       <td>${e.image ? `<button class="thumb-btn" type="button" data-action="view-image" data-goal-id="${goal.id}" data-entry-id="${e.id}" aria-label="View screenshot"><img src="${e.image}" class="thumb-img" alt="" /></button>` : ''}</td>
       <td><button class="btn-icon btn-icon-edit" type="button" data-action="open-log-entry" data-goal-id="${goal.id}" data-entry-id="${e.id}" aria-label="Edit entry">${EDIT_ICON_SVG}</button></td>
@@ -644,7 +652,7 @@ function renderMetricDetail(goal) {
     </tr>`).join('');
 
   const table = entries.length
-    ? `<div class="table-scroll"><table class="data-table"><thead><tr><th>Date</th><th>Value</th>${hasBreakdown ? '<th>Breakdown</th>' : ''}<th>Note</th><th></th><th></th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
+    ? `<div class="table-scroll"><table class="data-table"><thead><tr><th>Date</th><th>Value</th>${hasBreakdown ? '<th>Breakdown</th>' : ''}${showReps ? '<th>Reps</th>' : ''}<th>Note</th><th></th><th></th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
     : '<p class="empty-state">No entries yet.</p>';
 
   return `
@@ -1010,6 +1018,11 @@ function renderLogEntryModal() {
       <label>Value (${escapeHtml((goal.unit || 'unit').trim())})
         <input type="number" name="value" step="any" value="${editValues.length ? editValues[0] : ''}" required />
       </label>
+      ${isWeightUnit(goal.unit) ? `
+      <label>Reps (optional)
+        <input type="number" name="reps" step="1" min="1" value="${editEntry && editEntry.reps != null ? editEntry.reps : ''}" />
+      </label>
+      <p class="field-hint">How many reps at that weight, if you want to note it.</p>` : ''}
       <div class="value-fields-wrap">${extraValueRows}</div>
       <button type="button" class="btn btn-ghost btn-sm add-value-btn" data-action="add-value-field">+ Add another value</button>
       <p class="field-hint">Add one value per attempt/set — the highest one becomes this entry's value.</p>
@@ -1349,6 +1362,8 @@ function handleLogMetricEntry(goalId, data, image, entryId, removeImage) {
   const values = data.getAll('value').map(v => parseFloat(v)).filter(v => !isNaN(v));
   if (!values.length) return;
   const value = Math.max(...values);
+  const rawReps = data.get('reps');
+  const reps = rawReps ? parseInt(rawReps, 10) : null;
   const note = (data.get('note') || '').trim();
 
   const entry = entryId ? goal.entries.find(e => e.id === entryId) : null;
@@ -1357,11 +1372,12 @@ function handleLogMetricEntry(goalId, data, image, entryId, removeImage) {
     entry.date = date;
     entry.value = value;
     entry.values = values;
+    entry.reps = reps;
     entry.note = note;
     if (image) entry.image = image;
     else if (removeImage) entry.image = null;
   } else {
-    goal.entries.push({ id: uid(), date, value, values, note, image: image || null });
+    goal.entries.push({ id: uid(), date, value, values, reps, note, image: image || null });
   }
 
   try {
