@@ -2,8 +2,9 @@
 
 ## Fitness Progress Tracker
 
-A small standalone web app for tracking BMI, exercise, and food — three
-top-level sections, each purpose-built for what it tracks. Lives in
+A small standalone web app for tracking BMI, exercise, and food. Four tabs:
+a Daily Overview landing page, then BMI/Exercise/Food Tracker, each
+purpose-built for what it tracks. Lives in
 [`fitness-tracker/`](fitness-tracker/).
 
 ### Running it
@@ -20,6 +21,16 @@ way since it needs the `/api/scan-food` and `/api/scan-body` serverless
 functions — use `vercel dev` (from inside `fitness-tracker/`, with
 `ANTHROPIC_API_KEY` set) if you need to test that locally. Everything else
 in the app works fine without it.
+
+### Daily Overview
+
+The first thing you see on load (and the first tab in the nav): a card per
+section — BMI, Exercise, Food Tracker — each showing whether it's been
+logged today and a couple of key numbers (BMI's latest Body Fat %/Weight/
+BMI, or last-logged date if nothing's from today; Exercise's "X of Y goals
+logged today" and "X of Y achieved"; Food Tracker's today's calories and
+protein). Tap a card to jump into that section's full detail — it's a
+summary, not a replacement for the real pages.
 
 ### The three sections
 

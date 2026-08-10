@@ -234,7 +234,7 @@ function saveState() {
 
 let state = loadState();
 let ui = {
-  section: 'exercise',
+  section: 'overview',
   view: 'dashboard',
   goalId: null,
   foodView: 'log',
@@ -532,6 +532,7 @@ function wireCharts() {
 
 function renderTopNav() {
   const tabs = [
+    { key: 'overview', label: 'Daily Overview' },
     { key: 'bmi', label: 'BMI' },
     { key: 'exercise', label: 'Exercise' },
     { key: 'food', label: 'Food Tracker' }
@@ -550,6 +551,65 @@ function renderGlobalFooter() {
     <input type="file" id="import-file-input" accept="application/json" hidden />
     <p class="footer-note">Data is stored only in this browser (localStorage). Export a backup regularly if that matters to you.</p>
   </footer>`;
+}
+
+/* ---------- views: daily overview ---------- */
+
+function renderDailyOverviewSection() {
+  const today = todayStr();
+
+  const bmiLatest = bmiLatestEntry();
+  const bmiLoggedToday = !!(bmiLatest && bmiLatest.date === today);
+  const bmiValue = bmiLatest ? computeBmi(bmiLatest.weightLb, state.bmi.heightIn) : null;
+  const bmiStats = [];
+  if (bmiLatest && bmiLatest.value != null) bmiStats.push({ value: bmiLatest.value + '%', label: 'Body Fat' });
+  if (bmiLatest && bmiLatest.weightLb != null) bmiStats.push({ value: bmiLatest.weightLb + ' lb', label: 'Weight' });
+  if (bmiValue != null) bmiStats.push({ value: round1(bmiValue), label: 'BMI' + (bmiCategory(bmiValue) ? ' · ' + bmiCategory(bmiValue) : '') });
+  const bmiMeta = !bmiLatest
+    ? 'No entries yet'
+    : (bmiLoggedToday ? 'Logged today' : `Last logged ${formatDateLabel(bmiLatest.date)}`);
+
+  const goals = state.goals;
+  const loggedTodayCount = goals.filter(g => g.entries.some(e => e.date === today)).length;
+  const achievedCount = goals.filter(g => goalAchieved(g)).length;
+  const exerciseStats = goals.length ? [
+    { value: `${loggedTodayCount}/${goals.length}`, label: 'Logged today' },
+    { value: `${achievedCount}/${goals.length}`, label: 'Achieved' }
+  ] : [];
+  const exerciseMeta = goals.length ? null : 'No goals yet';
+
+  const totals = foodTotalsForDate(today);
+  const foodLoggedToday = state.food.entries.some(e => e.date === today);
+  const foodStats = foodLoggedToday ? [
+    { value: round1(totals.calories), label: 'Calories' },
+    { value: round1(totals.protein) + 'g', label: 'Protein' }
+  ] : [];
+  const foodMeta = foodLoggedToday ? null : 'Nothing logged today';
+
+  const cards = [
+    { section: 'bmi', title: 'BMI', badgeText: bmiLoggedToday ? 'Logged today' : 'Not logged today', badgeGood: bmiLoggedToday, stats: bmiStats, meta: bmiMeta },
+    { section: 'exercise', title: 'Exercise', badgeText: goals.length ? `${loggedTodayCount}/${goals.length} logged today` : 'No goals yet', badgeGood: loggedTodayCount > 0, stats: exerciseStats, meta: exerciseMeta },
+    { section: 'food', title: 'Food Tracker', badgeText: foodLoggedToday ? 'Logged today' : 'Not logged today', badgeGood: foodLoggedToday, stats: foodStats, meta: foodMeta }
+  ];
+
+  const cardsHtml = cards.map(c => `
+  <article class="overview-card" data-action="show-section" data-section="${c.section}" tabindex="0" role="button" aria-label="Open ${escapeHtml(c.title)}">
+    <div class="overview-card-header">
+      <h3>${escapeHtml(c.title)}</h3>
+      <span class="status-badge ${c.badgeGood ? 'status-good' : 'status-neutral'}">${escapeHtml(c.badgeText)}</span>
+    </div>
+    ${c.stats.length ? `<div class="overview-stat-row">${c.stats.map(s => `<div class="overview-stat"><span class="overview-stat-value">${s.value}</span><span class="overview-stat-label">${escapeHtml(s.label)}</span></div>`).join('')}</div>` : ''}
+    ${c.meta ? `<p class="overview-meta">${escapeHtml(c.meta)}</p>` : ''}
+  </article>`).join('');
+
+  return `
+  <div class="page-header">
+    <div>
+      <h1>Daily Overview</h1>
+      <p class="page-subtitle">Where things stand today across BMI, Exercise, and Food Tracker — tap a card for the full picture.</p>
+    </div>
+  </div>
+  <div class="overview-grid">${cardsHtml}</div>`;
 }
 
 /* ---------- views: exercise ---------- */
@@ -1333,7 +1393,9 @@ function renderLightbox() {
 function render() {
   const app = document.getElementById('app');
   let mainHtml;
-  if (ui.section === 'bmi') {
+  if (ui.section === 'overview') {
+    mainHtml = renderDailyOverviewSection();
+  } else if (ui.section === 'bmi') {
     mainHtml = renderBmiSection();
   } else if (ui.section === 'food') {
     mainHtml = ui.foodView === 'library' ? renderFoodLibrarySection() : renderFoodSection();
