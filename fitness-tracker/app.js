@@ -103,7 +103,7 @@ function defaultState() {
     seededPushups: true,
     seededPlank: true,
     bmi: { heightIn: null, entries: [] },
-    food: { entries: [] },
+    food: { entries: [], library: [] },
     goals: [
       {
         id: uid(),
@@ -198,6 +198,9 @@ function migrateState(parsed) {
   if (!parsed.food) {
     parsed.food = { entries: [] };
   }
+  if (!Array.isArray(parsed.food.library)) {
+    parsed.food.library = [];
+  }
 
   parsed.goals.forEach(g => {
     if (g.type === 'skill' && !g.unit) g.unit = ' reps';
@@ -234,6 +237,7 @@ let ui = {
   section: 'exercise',
   view: 'dashboard',
   goalId: null,
+  foodView: 'log',
   modal: null,
   modalGoalId: null,
   modalEntryId: null,
@@ -935,7 +939,10 @@ function renderFoodSection() {
       <h1>Food Tracker</h1>
       <p class="page-subtitle">Log meals and snacks — scan a nutrition label photo or enter macros manually.</p>
     </div>
-    <button class="btn btn-primary" type="button" data-action="open-log-food">+ Log food</button>
+    <div class="header-actions">
+      <button class="btn btn-ghost" type="button" data-action="show-food-library">Library</button>
+      <button class="btn btn-primary" type="button" data-action="open-log-food">+ Log food</button>
+    </div>
   </div>
   ${summary}
   <section class="card">
@@ -945,6 +952,41 @@ function renderFoodSection() {
   </section>
   <section class="card">
     <h2>History</h2>
+    ${table}
+  </section>`;
+}
+
+function renderFoodLibrarySection() {
+  const items = state.food.library;
+
+  const rows = items.map(item => `
+    <tr>
+      <td>${escapeHtml(item.name || '—')}</td>
+      <td>${item.calories != null ? round1(item.calories) : '—'}</td>
+      <td>${item.protein != null ? round1(item.protein) + 'g' : '—'}</td>
+      <td>${item.carbs != null ? round1(item.carbs) + 'g' : '—'}</td>
+      <td>${item.fat != null ? round1(item.fat) + 'g' : '—'}</td>
+      <td>${item.creatine != null ? round1(item.creatine) + 'g' : '—'}</td>
+      <td>${item.meal && MEAL_LABELS[item.meal] ? escapeHtml(MEAL_LABELS[item.meal]) : '—'}</td>
+      <td><button class="btn btn-primary btn-sm" type="button" data-action="quick-log-library-item" data-entry-id="${item.id}">+ Log</button></td>
+      <td class="td-icon"><button class="btn-icon btn-icon-edit" type="button" data-action="open-library-item" data-entry-id="${item.id}" aria-label="Edit saved food">${EDIT_ICON_SVG}</button></td>
+      <td><button class="btn-icon" type="button" data-action="delete-library-item" data-entry-id="${item.id}" aria-label="Delete saved food">&times;</button></td>
+    </tr>`).join('');
+
+  const table = items.length
+    ? `<div class="table-scroll"><table class="data-table"><thead><tr><th>Food</th><th>Calories</th><th>Protein</th><th>Carbs</th><th>Fat</th><th>Creatine</th><th>Meal</th><th></th><th></th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
+    : '<p class="empty-state">No saved foods yet — add something you eat often below.</p>';
+
+  return `
+  <div class="page-header">
+    <div>
+      <button class="btn btn-ghost btn-back" type="button" data-action="show-food-log">← Back to Food Tracker</button>
+      <h1>Food Library</h1>
+      <p class="page-subtitle">Save foods you eat often, then log them in one tap from here.</p>
+    </div>
+    <button class="btn btn-primary" type="button" data-action="open-library-item">+ Add to library</button>
+  </div>
+  <section class="card">
     ${table}
   </section>`;
 }
@@ -1163,11 +1205,8 @@ function renderEditHeightModal() {
   </form>`;
 }
 
-function renderLogFoodModal() {
-  const editEntry = ui.modalEntryId ? state.food.entries.find(e => e.id === ui.modalEntryId) : null;
+function renderFoodPhotoAndMacroFields(source, nameFieldHtml) {
   return `
-  <form data-form="log-food-entry" ${editEntry ? `data-entry-id="${editEntry.id}"` : ''}>
-    <h2>${editEntry ? 'Edit food entry' : 'Log food'}</h2>
     <label>Photo is a...
       <select name="photoMode" id="food-photo-mode">
         <option value="label">Nutrition label (reads the printed numbers)</option>
@@ -1178,26 +1217,16 @@ function renderLogFoodModal() {
       <input type="file" name="image" id="food-image-input" accept="image/*" />
     </label>
     <p class="field-hint" id="food-scan-status">Pick a photo to auto-fill the fields below, or just type them in. A label photo is read directly; a meal photo gets a rough estimate — not a precise reading — so double-check those numbers especially. The photo itself is only sent for reading and is never saved with the entry.</p>
-    ${editEntry && editEntry.image ? `
+    ${source && source.image ? `
     <div class="edit-image-current">
-      <img src="${editEntry.image}" alt="Current photo" class="edit-image-preview" />
+      <img src="${source.image}" alt="Current photo" class="edit-image-preview" />
       <label class="checkbox-row"><input type="checkbox" name="removeImage" /> Remove photo (kept from before this changed)</label>
     </div>` : ''}
-    <div class="form-row">
-      <label>Date
-        <input type="date" name="date" value="${editEntry ? editEntry.date : todayStr()}" max="${todayStr()}" required />
-      </label>
-      <label>Time (optional)
-        <input type="time" name="time" value="${editEntry && editEntry.time ? editEntry.time : nowTimeStr()}" />
-      </label>
-    </div>
-    <label>Food name (optional)
-      <input type="text" name="name" maxlength="80" value="${escapeHtml(editEntry ? (editEntry.name || '') : '')}" placeholder="e.g. Greek yogurt" />
-    </label>
+    ${nameFieldHtml}
     <label>Meal (optional)
       <select name="meal">
         <option value="">— No meal —</option>
-        ${MEAL_ORDER.map(key => `<option value="${key}" ${editEntry && editEntry.meal === key ? 'selected' : ''}>${MEAL_LABELS[key]}</option>`).join('')}
+        ${MEAL_ORDER.map(key => `<option value="${key}" ${source && source.meal === key ? 'selected' : ''}>${MEAL_LABELS[key]}</option>`).join('')}
       </select>
     </label>
     <label>Servings
@@ -1206,31 +1235,69 @@ function renderLogFoodModal() {
     <p class="field-hint">Scales the fields below — e.g. if the label is per serving and you're eating 1.5 servings, set this to 1.5. Works whether the numbers came from a scan or you typed them in.</p>
     <div class="form-row">
       <label>Calories
-        <input type="number" name="calories" step="any" value="${editEntry && editEntry.calories != null ? editEntry.calories : ''}" />
+        <input type="number" name="calories" step="any" value="${source && source.calories != null ? source.calories : ''}" />
       </label>
       <label>Protein (g)
-        <input type="number" name="protein" step="any" value="${editEntry && editEntry.protein != null ? editEntry.protein : ''}" />
+        <input type="number" name="protein" step="any" value="${source && source.protein != null ? source.protein : ''}" />
       </label>
     </div>
     <div class="form-row">
       <label>Carbs (g)
-        <input type="number" name="carbs" step="any" value="${editEntry && editEntry.carbs != null ? editEntry.carbs : ''}" />
+        <input type="number" name="carbs" step="any" value="${source && source.carbs != null ? source.carbs : ''}" />
       </label>
       <label>Fat (g)
-        <input type="number" name="fat" step="any" value="${editEntry && editEntry.fat != null ? editEntry.fat : ''}" />
+        <input type="number" name="fat" step="any" value="${source && source.fat != null ? source.fat : ''}" />
       </label>
     </div>
     <div class="form-row">
       <label>Creatine (g)
-        <input type="number" name="creatine" step="any" value="${editEntry && editEntry.creatine != null ? editEntry.creatine : ''}" />
+        <input type="number" name="creatine" step="any" value="${source && source.creatine != null ? source.creatine : ''}" />
+      </label>
+    </div>`;
+}
+
+function renderLogFoodModal() {
+  const editEntry = ui.modalEntryId ? state.food.entries.find(e => e.id === ui.modalEntryId) : null;
+  const nameField = `
+    <label>Food name (optional)
+      <input type="text" name="name" maxlength="80" value="${escapeHtml(editEntry ? (editEntry.name || '') : '')}" placeholder="e.g. Greek yogurt" />
+    </label>`;
+  return `
+  <form data-form="log-food-entry" ${editEntry ? `data-entry-id="${editEntry.id}"` : ''}>
+    <h2>${editEntry ? 'Edit food entry' : 'Log food'}</h2>
+    <div class="form-row">
+      <label>Date
+        <input type="date" name="date" value="${editEntry ? editEntry.date : todayStr()}" max="${todayStr()}" required />
+      </label>
+      <label>Time (optional)
+        <input type="time" name="time" value="${editEntry && editEntry.time ? editEntry.time : nowTimeStr()}" />
       </label>
     </div>
+    ${renderFoodPhotoAndMacroFields(editEntry, nameField)}
     <label>Note (optional)
       <input type="text" name="note" maxlength="140" value="${escapeHtml(editEntry ? (editEntry.note || '') : '')}" />
     </label>
     <div class="modal-actions">
       <button type="button" class="btn btn-ghost" data-action="close-modal">Cancel</button>
       <button type="submit" class="btn btn-primary">${editEntry ? 'Save changes' : 'Save'}</button>
+    </div>
+  </form>`;
+}
+
+function renderLibraryItemModal() {
+  const editItem = ui.modalEntryId ? state.food.library.find(i => i.id === ui.modalEntryId) : null;
+  const nameField = `
+    <label>Food name
+      <input type="text" name="name" maxlength="80" value="${escapeHtml(editItem ? (editItem.name || '') : '')}" placeholder="e.g. Greek yogurt" required />
+    </label>`;
+  return `
+  <form data-form="save-library-item" ${editItem ? `data-entry-id="${editItem.id}"` : ''}>
+    <h2>${editItem ? 'Edit saved food' : 'Add to library'}</h2>
+    <p class="modal-subtitle">Save something you eat often, so you can log it in one tap later.</p>
+    ${renderFoodPhotoAndMacroFields(editItem, nameField)}
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" data-action="close-modal">Cancel</button>
+      <button type="submit" class="btn btn-primary">${editItem ? 'Save changes' : 'Add to library'}</button>
     </div>
   </form>`;
 }
@@ -1244,6 +1311,7 @@ function renderModal() {
   else if (ui.modal === 'logBmi') inner = renderLogBmiModal();
   else if (ui.modal === 'editHeight') inner = renderEditHeightModal();
   else if (ui.modal === 'logFood') inner = renderLogFoodModal();
+  else if (ui.modal === 'libraryItem') inner = renderLibraryItemModal();
   return `
   <div class="modal-overlay">
     <div class="modal" role="dialog" aria-modal="true">
@@ -1268,7 +1336,7 @@ function render() {
   if (ui.section === 'bmi') {
     mainHtml = renderBmiSection();
   } else if (ui.section === 'food') {
-    mainHtml = renderFoodSection();
+    mainHtml = ui.foodView === 'library' ? renderFoodLibrarySection() : renderFoodSection();
   } else {
     const goal = ui.view === 'goal' && ui.goalId ? state.goals.find(g => g.id === ui.goalId) : null;
     if (ui.view === 'goal' && !goal) {
@@ -1648,6 +1716,66 @@ function handleDuplicateFoodEntry(entryId) {
   render();
 }
 
+function handleSaveLibraryItem(data, entryId) {
+  const name = (data.get('name') || '').trim();
+  if (!name) return;
+  const num = (key) => {
+    const raw = data.get(key);
+    return raw ? parseFloat(raw) : null;
+  };
+  const calories = num('calories');
+  const protein = num('protein');
+  const carbs = num('carbs');
+  const fat = num('fat');
+  const creatine = num('creatine');
+  const meal = data.get('meal') || null;
+
+  const item = entryId ? state.food.library.find(i => i.id === entryId) : null;
+  if (item) {
+    item.name = name;
+    item.calories = calories;
+    item.protein = protein;
+    item.carbs = carbs;
+    item.fat = fat;
+    item.creatine = creatine;
+    item.meal = meal;
+  } else {
+    state.food.library.push({ id: uid(), name, calories, protein, carbs, fat, creatine, meal });
+  }
+  saveState();
+  ui.modal = null;
+  ui.modalEntryId = null;
+  render();
+}
+
+function handleDeleteLibraryItem(id) {
+  state.food.library = state.food.library.filter(i => i.id !== id);
+  saveState();
+  render();
+}
+
+function handleQuickLogFromLibrary(id) {
+  const item = state.food.library.find(i => i.id === id);
+  if (!item) return;
+  state.food.entries.push({
+    id: uid(),
+    date: todayStr(),
+    time: nowTimeStr(),
+    name: item.name,
+    calories: item.calories,
+    protein: item.protein,
+    carbs: item.carbs,
+    fat: item.fat,
+    creatine: item.creatine,
+    meal: item.meal,
+    note: '',
+    image: null
+  });
+  saveState();
+  ui.foodView = 'log';
+  render();
+}
+
 async function handleScanFoodPhoto(file) {
   const statusEl = document.getElementById('food-scan-status');
   const modeEl = document.getElementById('food-photo-mode');
@@ -1774,6 +1902,7 @@ function onAppClick(e) {
       ui.section = actionEl.dataset.section;
       ui.view = 'dashboard';
       ui.goalId = null;
+      ui.foodView = 'log';
       render();
       break;
     case 'show-dashboard':
@@ -1799,6 +1928,17 @@ function onAppClick(e) {
       handleDeleteFoodEntry(actionEl.dataset.entryId); break;
     case 'duplicate-food-entry':
       handleDuplicateFoodEntry(actionEl.dataset.entryId); break;
+    case 'show-food-library':
+      ui.foodView = 'library'; render(); break;
+    case 'show-food-log':
+      ui.foodView = 'log'; render(); break;
+    case 'open-library-item':
+      foodServingsBaseline = {};
+      ui.modal = 'libraryItem'; ui.modalEntryId = actionEl.dataset.entryId || null; render(); break;
+    case 'quick-log-library-item':
+      handleQuickLogFromLibrary(actionEl.dataset.entryId); break;
+    case 'delete-library-item':
+      handleDeleteLibraryItem(actionEl.dataset.entryId); break;
     case 'close-modal':
       closeModal(); break;
     case 'delete-goal':
@@ -1905,6 +2045,9 @@ async function onAppSubmit(e) {
       handleLogFoodEntry(data, null, form.dataset.entryId || null, removeImage);
       break;
     }
+    case 'save-library-item':
+      handleSaveLibraryItem(data, form.dataset.entryId || null);
+      break;
   }
 }
 

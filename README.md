@@ -88,6 +88,12 @@ in the app works fine without it.
   unless a day has no labeled entries at all, in which case it's just shown
   as a flat list) — entries within each group are sorted chronologically by
   time, and each day's header shows that day's totals across every meal.
+  A **Library** (button next to "+ Log food") holds foods you eat often —
+  saved once (typed, scanned, or scaled with Servings like any other entry,
+  minus a date/time since it's a reusable template, not a specific meal) and
+  then logged again with a single **+ Log** tap, which drops a new entry in
+  today at the current time using the saved macros/meal. No photo is ever
+  kept on a library item either, same as regular Food entries.
 
 ### Shared entry features (BMI, Exercise, Food)
 
