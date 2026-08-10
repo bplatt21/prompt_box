@@ -104,7 +104,12 @@ summary, not a replacement for the real pages.
   minus a date/time since it's a reusable template, not a specific meal) and
   then logged again with a single **+ Log** tap, which drops a new entry in
   today at the current time using the saved macros/meal. No photo is ever
-  kept on a library item either, same as regular Food entries.
+  kept on a library item either, same as regular Food entries. The regular
+  "+ Log food" form also gets a **"Quickly fill from library"** picker at
+  the top (only shown when you have library items saved) — pick one to fill
+  in the name/meal/macro fields below without leaving the form, then adjust
+  anything (including Date/Time, which the pick never touches) before
+  saving; it's a shortcut into the same form, not a separate save path.
 
 ### Shared entry features (BMI, Exercise, Food)
 

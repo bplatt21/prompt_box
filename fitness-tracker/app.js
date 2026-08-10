@@ -1325,6 +1325,14 @@ function renderLogFoodModal() {
   return `
   <form data-form="log-food-entry" ${editEntry ? `data-entry-id="${editEntry.id}"` : ''}>
     <h2>${editEntry ? 'Edit food entry' : 'Log food'}</h2>
+    ${!editEntry && state.food.library.length ? `
+    <label>Quickly fill from library (optional)
+      <select id="food-library-picker">
+        <option value="">— Choose a saved food —</option>
+        ${state.food.library.map(item => `<option value="${item.id}">${escapeHtml(item.name || 'Unnamed')}</option>`).join('')}
+      </select>
+    </label>
+    <p class="field-hint">Fills in the fields below from something you've saved — still editable before saving. Date and time stay as set below.</p>` : ''}
     <div class="form-row">
       <label>Date
         <input type="date" name="date" value="${editEntry ? editEntry.date : todayStr()}" max="${todayStr()}" required />
@@ -2123,6 +2131,24 @@ async function onAppChange(e) {
     const file = e.target.files[0];
     if (!file) return;
     await handleScanFoodPhoto(file);
+    return;
+  }
+  if (e.target.id === 'food-library-picker') {
+    const id = e.target.value;
+    if (!id) return;
+    const item = state.food.library.find(i => i.id === id);
+    if (!item) return;
+    const nameEl = document.querySelector('[name="name"]');
+    if (nameEl && item.name) nameEl.value = item.name;
+    const mealEl = document.querySelector('[name="meal"]');
+    if (mealEl && item.meal) mealEl.value = item.meal;
+    const servings = currentServingsValue();
+    FOOD_MACRO_FIELDS.forEach(key => {
+      if (item[key] == null) return;
+      foodServingsBaseline[key] = item[key];
+      const el = document.querySelector(`[name="${key}"]`);
+      if (el) el.value = round1(item[key] * servings);
+    });
     return;
   }
   if (e.target.name === 'servings') {
