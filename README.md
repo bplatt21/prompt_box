@@ -109,7 +109,13 @@ summary, not a replacement for the real pages.
   the top (only shown when you have library items saved) — pick one to fill
   in the name/meal/macro fields below without leaving the form, then adjust
   anything (including Date/Time, which the pick never touches) before
-  saving; it's a shortcut into the same form, not a separate save path.
+  saving; it's a shortcut into the same form, not a separate save path. Going
+  the other direction, that same form (only when logging a brand-new entry,
+  not editing) has an **"Add to library"** checkbox — check it to save
+  whatever you're logging as a library item too, in the same step. It needs
+  a food name; if you check it but leave the name blank, the entry still
+  saves normally and you're told the library save was skipped rather than
+  losing the whole entry over it.
 
 ### Shared entry features (BMI, Exercise, Food)
 

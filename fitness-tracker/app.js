@@ -1345,6 +1345,9 @@ function renderLogFoodModal() {
     <label>Note (optional)
       <input type="text" name="note" maxlength="140" value="${escapeHtml(editEntry ? (editEntry.note || '') : '')}" />
     </label>
+    ${!editEntry ? `
+    <label class="checkbox-row"><input type="checkbox" name="addToLibrary" /> Add to library</label>
+    <p class="field-hint">Also saves this as a reusable library item (needs a food name) — separate from logging it today.</p>` : ''}
     <div class="modal-actions">
       <button type="button" class="btn btn-ghost" data-action="close-modal">Cancel</button>
       <button type="submit" class="btn btn-primary">${editEntry ? 'Save changes' : 'Save'}</button>
@@ -1727,6 +1730,7 @@ function handleLogFoodEntry(data, image, entryId, removeImage) {
   const creatine = num('creatine');
   const meal = data.get('meal') || null;
   const note = (data.get('note') || '').trim();
+  const addToLibrary = !entryId && data.get('addToLibrary') === 'on';
 
   const entry = entryId ? state.food.entries.find(e => e.id === entryId) : null;
   if (entry) {
@@ -1746,6 +1750,12 @@ function handleLogFoodEntry(data, image, entryId, removeImage) {
     state.food.entries.push({ id: uid(), date, time, name, calories, protein, carbs, fat, creatine, meal, note, image: image || null });
   }
 
+  let libraryNameMissing = false;
+  if (addToLibrary) {
+    if (name) state.food.library.push({ id: uid(), name, calories, protein, carbs, fat, creatine, meal });
+    else libraryNameMissing = true;
+  }
+
   try {
     saveState();
   } catch (err) {
@@ -1753,6 +1763,9 @@ function handleLogFoodEntry(data, image, entryId, removeImage) {
     target.image = null;
     saveState();
     alert('Entry saved, but the photo was too large for local storage and was not kept.');
+  }
+  if (libraryNameMissing) {
+    alert('Entry saved, but a food name is needed to also save it to your library.');
   }
   ui.modal = null;
   ui.modalEntryId = null;
