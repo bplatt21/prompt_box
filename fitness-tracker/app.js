@@ -1325,6 +1325,14 @@ function renderLogFoodModal() {
   return `
   <form data-form="log-food-entry" ${editEntry ? `data-entry-id="${editEntry.id}"` : ''}>
     <h2>${editEntry ? 'Edit food entry' : 'Log food'}</h2>
+    ${!editEntry ? `
+    <label>Look up a common food (optional)
+      <input type="text" id="food-common-lookup" list="common-foods-datalist" placeholder="e.g. Banana, Chicken Breast..." autocomplete="off" />
+    </label>
+    <datalist id="common-foods-datalist">
+      ${COMMON_FOODS.map(f => `<option value="${escapeHtml(f.name)}"></option>`).join('')}
+    </datalist>
+    <p class="field-hint">Fills in the name and macros below with typical reference values for that food — not a measurement of your exact portion or brand, so double-check and adjust if it's not a close match.</p>` : ''}
     ${!editEntry && state.food.library.length ? `
     <label>Quickly fill from library (optional)
       <select id="food-library-picker">
@@ -1707,6 +1715,75 @@ function handleEditHeight(data) {
 const FOOD_MACRO_FIELDS = ['calories', 'protein', 'carbs', 'fat', 'creatine'];
 const MEAL_ORDER = ['breakfast', 'lunch', 'dinner'];
 const MEAL_LABELS = { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner' };
+
+// Typical reference values for common whole foods (not brand-specific), used
+// by the "Look up a common food" lookup. Creatine is left unset throughout —
+// it isn't a meaningfully labeled property of whole foods.
+const COMMON_FOODS = [
+  { name: 'Chicken Breast, cooked (3 oz)', calories: 165, protein: 31, carbs: 0, fat: 3.6 },
+  { name: 'Chicken Thigh, cooked (3 oz)', calories: 178, protein: 23, carbs: 0, fat: 9 },
+  { name: 'Ground Beef 80/20, cooked (3 oz)', calories: 230, protein: 21, carbs: 0, fat: 15 },
+  { name: 'Ground Beef 90/10, cooked (3 oz)', calories: 173, protein: 22, carbs: 0, fat: 9 },
+  { name: 'Sirloin Steak, cooked (3 oz)', calories: 156, protein: 26, carbs: 0, fat: 5 },
+  { name: 'Salmon, cooked (3 oz)', calories: 175, protein: 19, carbs: 0, fat: 10 },
+  { name: 'Tuna, canned in water (3 oz)', calories: 99, protein: 22, carbs: 0, fat: 0.7 },
+  { name: 'Shrimp, cooked (3 oz)', calories: 84, protein: 18, carbs: 0.2, fat: 0.9 },
+  { name: 'Turkey Breast, cooked (3 oz)', calories: 125, protein: 26, carbs: 0, fat: 1.7 },
+  { name: 'Pork Chop, cooked (3 oz)', calories: 197, protein: 26, carbs: 0, fat: 9.4 },
+  { name: 'Bacon (2 slices)', calories: 90, protein: 6, carbs: 0.3, fat: 7 },
+  { name: 'Egg, large (1)', calories: 72, protein: 6.3, carbs: 0.4, fat: 4.8 },
+  { name: 'Egg Whites (1 large)', calories: 17, protein: 3.6, carbs: 0.2, fat: 0.1 },
+  { name: 'Tofu, firm (3 oz)', calories: 70, protein: 8, carbs: 1.9, fat: 4 },
+  { name: 'Tempeh (3 oz)', calories: 160, protein: 15, carbs: 8, fat: 9 },
+  { name: 'Milk, whole (1 cup)', calories: 149, protein: 8, carbs: 12, fat: 8 },
+  { name: 'Milk, skim (1 cup)', calories: 83, protein: 8, carbs: 12, fat: 0.2 },
+  { name: 'Greek Yogurt, plain nonfat (1 cup)', calories: 130, protein: 23, carbs: 9, fat: 0.7 },
+  { name: 'Cottage Cheese, low-fat (1 cup)', calories: 163, protein: 28, carbs: 6, fat: 2.3 },
+  { name: 'Cheddar Cheese (1 oz)', calories: 113, protein: 7, carbs: 0.4, fat: 9 },
+  { name: 'Mozzarella, part-skim (1 oz)', calories: 72, protein: 6.9, carbs: 0.8, fat: 4.5 },
+  { name: 'String Cheese (1 stick)', calories: 80, protein: 6, carbs: 1, fat: 6 },
+  { name: 'White Rice, cooked (1 cup)', calories: 205, protein: 4.3, carbs: 45, fat: 0.4 },
+  { name: 'Brown Rice, cooked (1 cup)', calories: 216, protein: 5, carbs: 45, fat: 1.8 },
+  { name: 'Quinoa, cooked (1 cup)', calories: 222, protein: 8, carbs: 39, fat: 3.6 },
+  { name: 'Oats, dry (1/2 cup)', calories: 150, protein: 5, carbs: 27, fat: 2.5 },
+  { name: 'White Bread (1 slice)', calories: 75, protein: 2.6, carbs: 14, fat: 1 },
+  { name: 'Whole Wheat Bread (1 slice)', calories: 81, protein: 4, carbs: 14, fat: 1.1 },
+  { name: 'Pasta, cooked (1 cup)', calories: 221, protein: 8, carbs: 43, fat: 1.3 },
+  { name: 'Sweet Potato, baked (1 medium)', calories: 103, protein: 2.3, carbs: 24, fat: 0.2 },
+  { name: 'Potato, baked (1 medium)', calories: 161, protein: 4.3, carbs: 37, fat: 0.2 },
+  { name: 'Tortilla, flour (1 medium)', calories: 146, protein: 4, carbs: 24, fat: 3.5 },
+  { name: 'Bagel, plain (1 medium)', calories: 245, protein: 10, carbs: 48, fat: 1.5 },
+  { name: 'Banana, medium (1)', calories: 105, protein: 1.3, carbs: 27, fat: 0.4 },
+  { name: 'Apple, medium (1)', calories: 95, protein: 0.5, carbs: 25, fat: 0.3 },
+  { name: 'Orange, medium (1)', calories: 62, protein: 1.2, carbs: 15, fat: 0.2 },
+  { name: 'Strawberries (1 cup)', calories: 49, protein: 1, carbs: 12, fat: 0.5 },
+  { name: 'Blueberries (1 cup)', calories: 84, protein: 1.1, carbs: 21, fat: 0.5 },
+  { name: 'Grapes (1 cup)', calories: 104, protein: 1.1, carbs: 27, fat: 0.2 },
+  { name: 'Watermelon (1 cup)', calories: 46, protein: 0.9, carbs: 11, fat: 0.2 },
+  { name: 'Avocado (1/2 medium)', calories: 120, protein: 1.5, carbs: 6, fat: 11 },
+  { name: 'Pineapple (1 cup)', calories: 82, protein: 0.9, carbs: 22, fat: 0.2 },
+  { name: 'Mango (1 cup)', calories: 99, protein: 1.4, carbs: 25, fat: 0.6 },
+  { name: 'Broccoli, cooked (1 cup)', calories: 55, protein: 3.7, carbs: 11, fat: 0.6 },
+  { name: 'Spinach, raw (1 cup)', calories: 7, protein: 0.9, carbs: 1.1, fat: 0.1 },
+  { name: 'Carrots, raw (1 cup)', calories: 52, protein: 1.2, carbs: 12, fat: 0.3 },
+  { name: 'Green Beans, cooked (1 cup)', calories: 44, protein: 2.4, carbs: 10, fat: 0.4 },
+  { name: 'Bell Pepper, raw (1 cup)', calories: 30, protein: 1, carbs: 7, fat: 0.3 },
+  { name: 'Cucumber (1 cup)', calories: 16, protein: 0.7, carbs: 3.8, fat: 0.1 },
+  { name: 'Tomato, medium (1)', calories: 22, protein: 1.1, carbs: 4.8, fat: 0.2 },
+  { name: 'Corn, cooked (1 cup)', calories: 143, protein: 5.4, carbs: 31, fat: 2.2 },
+  { name: 'Asparagus, cooked (1 cup)', calories: 40, protein: 4.3, carbs: 7.4, fat: 0.4 },
+  { name: 'Black Beans, cooked (1 cup)', calories: 227, protein: 15, carbs: 41, fat: 0.9 },
+  { name: 'Chickpeas, cooked (1 cup)', calories: 269, protein: 15, carbs: 45, fat: 4.3 },
+  { name: 'Lentils, cooked (1 cup)', calories: 230, protein: 18, carbs: 40, fat: 0.8 },
+  { name: 'Peanut Butter (2 tbsp)', calories: 190, protein: 8, carbs: 6, fat: 16 },
+  { name: 'Almonds (1 oz, ~23 nuts)', calories: 164, protein: 6, carbs: 6, fat: 14 },
+  { name: 'Walnuts (1 oz)', calories: 185, protein: 4.3, carbs: 3.9, fat: 18.5 },
+  { name: 'Cashews (1 oz)', calories: 157, protein: 5.2, carbs: 8.6, fat: 12.4 },
+  { name: 'Chia Seeds (1 tbsp)', calories: 58, protein: 2, carbs: 5, fat: 3.7 },
+  { name: 'Olive Oil (1 tbsp)', calories: 119, protein: 0, carbs: 0, fat: 13.5 },
+  { name: 'Butter (1 tbsp)', calories: 102, protein: 0.1, carbs: 0, fat: 11.5 },
+  { name: 'Honey (1 tbsp)', calories: 64, protein: 0.1, carbs: 17, fat: 0 }
+];
 let foodServingsBaseline = {};
 
 function currentServingsValue() {
@@ -2144,6 +2221,20 @@ async function onAppChange(e) {
     const file = e.target.files[0];
     if (!file) return;
     await handleScanFoodPhoto(file);
+    return;
+  }
+  if (e.target.id === 'food-common-lookup') {
+    const food = COMMON_FOODS.find(f => f.name.toLowerCase() === e.target.value.trim().toLowerCase());
+    if (!food) return;
+    const nameEl = document.querySelector('[name="name"]');
+    if (nameEl) nameEl.value = food.name;
+    const servings = currentServingsValue();
+    FOOD_MACRO_FIELDS.forEach(key => {
+      if (food[key] == null) return;
+      foodServingsBaseline[key] = food[key];
+      const el = document.querySelector(`[name="${key}"]`);
+      if (el) el.value = round1(food[key] * servings);
+    });
     return;
   }
   if (e.target.id === 'food-library-picker') {

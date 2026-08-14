@@ -73,7 +73,14 @@ summary, not a replacement for the real pages.
     an attempts/successes count.
   - Click "+ Add goal" to add more of either type.
 - **Food Tracker** — log food/meals with calories, protein, carbs, fat, and
-  creatine (g). Optionally attach a photo — a **"Photo is a..."** selector
+  creatine (g). When logging a new entry, a **"Look up a common food"** field
+  (type-ahead over roughly 60 everyday staples — meats, dairy, grains,
+  fruits, vegetables, legumes/nuts, a few oils/condiments) fills in the name
+  and macros for whatever you pick. These are typical reference values for
+  a standard serving, not a measurement of your actual portion or brand, so
+  treat them as a fast starting point to adjust rather than an exact
+  reading — unlike a label scan (below), which reads real printed numbers.
+  Optionally attach a photo — a **"Photo is a..."** selector
   picks how it's read: **Nutrition label** sends it to an AI vision model
   (`fitness-tracker/api/scan-food.js`, using `ANTHROPIC_API_KEY`) that reads
   the printed numbers directly and auto-fills the macro fields (creatine
