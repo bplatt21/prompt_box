@@ -1330,7 +1330,7 @@ function renderLogFoodModal() {
       <input type="text" id="food-common-lookup" list="common-foods-datalist" placeholder="e.g. Banana, Chicken Breast..." autocomplete="off" />
     </label>
     <datalist id="common-foods-datalist">
-      ${COMMON_FOODS.map(f => `<option value="${escapeHtml(f.name)}"></option>`).join('')}
+      ${COMMON_FOODS.slice().sort((a, b) => a.name.localeCompare(b.name)).map(f => `<option value="${escapeHtml(f.name)}"></option>`).join('')}
     </datalist>
     <p class="field-hint">Fills in the name and macros below with typical reference values for that food — not a measurement of your exact portion or brand, so double-check and adjust if it's not a close match.</p>` : ''}
     ${!editEntry && state.food.library.length ? `
