@@ -952,7 +952,7 @@ function renderFoodSection() {
   const entryRow = (e) => `
     <tr>
       <td>${e.time ? escapeHtml(formatTimeLabel(e.time)) : '—'}</td>
-      <td>${escapeHtml(e.name || '—')}</td>
+      <td>${escapeHtml(e.name || '—')}${e.servingSize ? `<br><span class="cell-sub">${escapeHtml(e.servingSize)}</span>` : ''}</td>
       <td>${e.calories != null ? round1(e.calories) : '—'}</td>
       <td>${e.protein != null ? round1(e.protein) + 'g' : '—'}</td>
       <td>${e.carbs != null ? round1(e.carbs) + 'g' : '—'}</td>
@@ -1021,7 +1021,7 @@ function renderFoodLibrarySection() {
 
   const rows = items.map(item => `
     <tr>
-      <td>${escapeHtml(item.name || '—')}</td>
+      <td>${escapeHtml(item.name || '—')}${item.servingSize ? `<br><span class="cell-sub">${escapeHtml(item.servingSize)}</span>` : ''}</td>
       <td>${item.calories != null ? round1(item.calories) : '—'}</td>
       <td>${item.protein != null ? round1(item.protein) + 'g' : '—'}</td>
       <td>${item.carbs != null ? round1(item.carbs) + 'g' : '—'}</td>
@@ -1289,6 +1289,10 @@ function renderFoodPhotoAndMacroFields(source, nameFieldHtml) {
         ${MEAL_ORDER.map(key => `<option value="${key}" ${source && source.meal === key ? 'selected' : ''}>${MEAL_LABELS[key]}</option>`).join('')}
       </select>
     </label>
+    <label>Serving size (optional)
+      <input type="text" name="servingSize" maxlength="60" value="${escapeHtml(source && source.servingSize ? source.servingSize : '')}" placeholder="e.g. 1 cup (240g)" />
+    </label>
+    <p class="field-hint">What one serving actually is — read automatically off a scanned nutrition label, or type it yourself. Kept as a reference so "2 servings" below means something concrete later.</p>
     <label>Servings
       <input type="number" name="servings" step="any" min="0" value="1" />
     </label>
@@ -1337,7 +1341,7 @@ function renderLogFoodModal() {
     <label>Quickly fill from library (optional)
       <select id="food-library-picker">
         <option value="">— Choose a saved food —</option>
-        ${state.food.library.map(item => `<option value="${item.id}">${escapeHtml(item.name || 'Unnamed')}</option>`).join('')}
+        ${state.food.library.map(item => `<option value="${item.id}">${escapeHtml(item.name || 'Unnamed')}${item.servingSize ? ' — ' + escapeHtml(item.servingSize) : ''}</option>`).join('')}
       </select>
     </label>
     <p class="field-hint">Fills in the fields below from something you've saved — still editable before saving. Date and time stay as set below.</p>` : ''}
@@ -1806,6 +1810,7 @@ function handleLogFoodEntry(data, image, entryId, removeImage) {
   const fat = num('fat');
   const creatine = num('creatine');
   const meal = data.get('meal') || null;
+  const servingSize = (data.get('servingSize') || '').trim() || null;
   const note = (data.get('note') || '').trim();
   const addToLibrary = !entryId && data.get('addToLibrary') === 'on';
 
@@ -1820,16 +1825,17 @@ function handleLogFoodEntry(data, image, entryId, removeImage) {
     entry.fat = fat;
     entry.creatine = creatine;
     entry.meal = meal;
+    entry.servingSize = servingSize;
     entry.note = note;
     if (image) entry.image = image;
     else if (removeImage) entry.image = null;
   } else {
-    state.food.entries.push({ id: uid(), date, time, name, calories, protein, carbs, fat, creatine, meal, note, image: image || null });
+    state.food.entries.push({ id: uid(), date, time, name, calories, protein, carbs, fat, creatine, meal, servingSize, note, image: image || null });
   }
 
   let libraryNameMissing = false;
   if (addToLibrary) {
-    if (name) state.food.library.push({ id: uid(), name, calories, protein, carbs, fat, creatine, meal });
+    if (name) state.food.library.push({ id: uid(), name, calories, protein, carbs, fat, creatine, meal, servingSize });
     else libraryNameMissing = true;
   }
 
@@ -1869,6 +1875,7 @@ function handleDuplicateFoodEntry(entryId) {
     fat: source.fat,
     creatine: source.creatine,
     meal: source.meal,
+    servingSize: source.servingSize || null,
     note: '',
     image: null
   });
@@ -1889,6 +1896,7 @@ function handleSaveLibraryItem(data, entryId) {
   const fat = num('fat');
   const creatine = num('creatine');
   const meal = data.get('meal') || null;
+  const servingSize = (data.get('servingSize') || '').trim() || null;
 
   const item = entryId ? state.food.library.find(i => i.id === entryId) : null;
   if (item) {
@@ -1899,8 +1907,9 @@ function handleSaveLibraryItem(data, entryId) {
     item.fat = fat;
     item.creatine = creatine;
     item.meal = meal;
+    item.servingSize = servingSize;
   } else {
-    state.food.library.push({ id: uid(), name, calories, protein, carbs, fat, creatine, meal });
+    state.food.library.push({ id: uid(), name, calories, protein, carbs, fat, creatine, meal, servingSize });
   }
   saveState();
   ui.modal = null;
@@ -1928,6 +1937,7 @@ function handleQuickLogFromLibrary(id) {
     fat: item.fat,
     creatine: item.creatine,
     meal: item.meal,
+    servingSize: item.servingSize || null,
     note: '',
     image: null
   });
@@ -1956,6 +1966,7 @@ async function handleScanFoodPhoto(file) {
       if (el) el.value = val;
     };
     setIfPresent('name', result.name);
+    setIfPresent('servingSize', result.servingSize);
     const servings = currentServingsValue();
     FOOD_MACRO_FIELDS.forEach(key => {
       if (result[key] == null) return;
@@ -2246,6 +2257,8 @@ async function onAppChange(e) {
     if (nameEl && item.name) nameEl.value = item.name;
     const mealEl = document.querySelector('[name="meal"]');
     if (mealEl && item.meal) mealEl.value = item.meal;
+    const servingSizeEl = document.querySelector('[name="servingSize"]');
+    if (servingSizeEl && item.servingSize) servingSizeEl.value = item.servingSize;
     const servings = currentServingsValue();
     FOOD_MACRO_FIELDS.forEach(key => {
       if (item[key] == null) return;

@@ -85,13 +85,20 @@ summary, not a replacement for the real pages.
   (`fitness-tracker/api/scan-food.js`, using `ANTHROPIC_API_KEY`) that reads
   the printed numbers directly and auto-fills the macro fields (creatine
   included, for supplement labels that list it) — as reliable as the label
-  itself. **Photo of the meal itself** is for food with no label (a
+  itself. A label scan also reads the label's printed **Serving size**
+  (e.g. "1 cup (240g)") into its own field, kept as a reference alongside
+  the macros — not scaled by Servings itself, just a record of what "1
+  serving" of this food actually is, so a saved library item still means
+  something concrete if you come back to it later wanting 2 servings.
+  **Photo of the meal itself** is for food with no label (a
   restaurant plate, home cooking): the same endpoint instead has the AI
   *visually estimate* calories/macros for the whole portion shown, which is
   inherently a rough guess, not a reading — the UI says so explicitly, and
-  those numbers are worth double-checking more than a label scan's. Either
-  way the fields stay fully editable before saving. A **Servings** field
-  scales all the macro fields at once —
+  those numbers are worth double-checking more than a label scan's (there's
+  no printed serving size to read here either, so that field is left blank).
+  Either way the fields — including Serving size — stay fully editable
+  before saving, whether they came from a scan or you typed them. A
+  **Servings** field scales all the macro fields at once —
   set it to 1.5 if you're eating 1.5x whatever the label (or your typed-in
   numbers) describe; works whether the starting numbers came from a scan or
   manual entry, and re-scales correctly if you change it more than once or
@@ -108,15 +115,18 @@ summary, not a replacement for the real pages.
   time, and each day's header shows that day's totals across every meal.
   A **Library** (button next to "+ Log food") holds foods you eat often —
   saved once (typed, scanned, or scaled with Servings like any other entry,
-  minus a date/time since it's a reusable template, not a specific meal) and
-  then logged again with a single **+ Log** tap, which drops a new entry in
-  today at the current time using the saved macros/meal. No photo is ever
-  kept on a library item either, same as regular Food entries. The regular
-  "+ Log food" form also gets a **"Quickly fill from library"** picker at
-  the top (only shown when you have library items saved) — pick one to fill
-  in the name/meal/macro fields below without leaving the form, then adjust
-  anything (including Date/Time, which the pick never touches) before
-  saving; it's a shortcut into the same form, not a separate save path. Going
+  minus a date/time since it's a reusable template, not a specific meal,
+  but carrying its Serving size along with it) and then logged again with
+  a single **+ Log** tap, which drops a new entry in today at the current
+  time using the saved macros/meal/serving size. No photo is ever kept on
+  a library item either, same as regular Food entries. The regular "+ Log
+  food" form also gets a **"Quickly fill from library"** picker at the top
+  (only shown when you have library items saved), listing each saved
+  food's serving size next to its name so you can tell them apart — pick
+  one to fill in the name/meal/serving size/macro fields below without
+  leaving the form, then adjust anything (including Date/Time, which the
+  pick never touches) before saving; it's a shortcut into the same form,
+  not a separate save path. Going
   the other direction, that same form (only when logging a brand-new entry,
   not editing) has an **"Add to library"** checkbox — check it to save
   whatever you're logging as a library item too, in the same step. It needs

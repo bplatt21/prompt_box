@@ -7,12 +7,12 @@ function getClient() {
 }
 
 const LABEL_SYSTEM_PROMPT = `You read nutrition facts labels from photos. Respond with ONLY a JSON object (no markdown fences, no explanation) matching this exact shape:
-{"name": string|null, "calories": number|null, "protein": number|null, "carbs": number|null, "fat": number|null, "creatine": number|null}
-Use the values for ONE serving as printed on the label. "name" is your best guess at the food/product name if visible, otherwise null. "creatine" is grams of creatine (e.g. creatine monohydrate) per serving — most food labels won't list this, so leave it null unless the label explicitly shows a creatine amount (common on supplement tubs). If a field truly cannot be read, use null for it rather than guessing. If the image isn't a nutrition label at all, return all nulls.`;
+{"name": string|null, "servingSize": string|null, "calories": number|null, "protein": number|null, "carbs": number|null, "fat": number|null, "creatine": number|null}
+Use the values for ONE serving as printed on the label. "name" is your best guess at the food/product name if visible, otherwise null. "servingSize" is the label's printed serving size description verbatim (e.g. "1 cup (240g)", "2 crackers (30g)", "1 bar (60g)"), or null if it isn't legible. "creatine" is grams of creatine (e.g. creatine monohydrate) per serving — most food labels won't list this, so leave it null unless the label explicitly shows a creatine amount (common on supplement tubs). If a field truly cannot be read, use null for it rather than guessing. If the image isn't a nutrition label at all, return all nulls.`;
 
 const MEAL_SYSTEM_PROMPT = `You estimate the nutritional content of a meal from a photo of the food itself (not a label — there are no printed numbers to read). Respond with ONLY a JSON object (no markdown fences, no explanation) matching this exact shape:
-{"name": string|null, "calories": number|null, "protein": number|null, "carbs": number|null, "fat": number|null, "creatine": null}
-Judge apparent ingredients, portion size, and likely preparation (fried, grilled, sauced, dressed, etc.) to give your best-effort estimate for the WHOLE portion shown in the photo, not a "per serving" amount. This is inherently a rough guess, not a precise reading — use reasonable typical-restaurant-portion judgment, and don't be afraid to give a number even if uncertain. "creatine" is always null since it can't be visually estimated. "name" is your best guess at what the dish is, otherwise null. If the image doesn't show food at all, return all nulls.`;
+{"name": string|null, "servingSize": null, "calories": number|null, "protein": number|null, "carbs": number|null, "fat": number|null, "creatine": null}
+Judge apparent ingredients, portion size, and likely preparation (fried, grilled, sauced, dressed, etc.) to give your best-effort estimate for the WHOLE portion shown in the photo, not a "per serving" amount. This is inherently a rough guess, not a precise reading — use reasonable typical-restaurant-portion judgment, and don't be afraid to give a number even if uncertain. "creatine" is always null since it can't be visually estimated. "servingSize" is always null — there's no printed serving size to read off a meal photo. "name" is your best guess at what the dish is, otherwise null. If the image doesn't show food at all, return all nulls.`;
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
@@ -70,6 +70,7 @@ module.exports = async (req, res) => {
     const numOrNull = (v) => (typeof v === 'number' && !isNaN(v) ? v : null);
     res.status(200).json({
       name: typeof parsed.name === 'string' ? parsed.name : null,
+      servingSize: typeof parsed.servingSize === 'string' ? parsed.servingSize : null,
       calories: numOrNull(parsed.calories),
       protein: numOrNull(parsed.protein),
       carbs: numOrNull(parsed.carbs),
