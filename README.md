@@ -120,8 +120,9 @@ summary, not a replacement for the real pages.
   a single **+ Log** tap, which drops a new entry in today at the current
   time using the saved macros/meal/serving size. No photo is ever kept on
   a library item either, same as regular Food entries. The regular "+ Log
-  food" form also gets a **"Quickly fill from library"** picker at the top
-  (only shown when you have library items saved), listing each saved
+  food" form also gets a **"Quickly fill from library"** picker, right
+  below the photo scanner and above the name/macro fields (only shown when
+  you have library items saved), listing each saved
   food's serving size next to its name so you can tell them apart — pick
   one to fill in the name/meal/serving size/macro fields below without
   leaving the form, then adjust anything (including Date/Time, which the

@@ -1265,7 +1265,7 @@ function renderEditHeightModal() {
   </form>`;
 }
 
-function renderFoodPhotoAndMacroFields(source, nameFieldHtml) {
+function renderFoodPhotoAndMacroFields(source, nameFieldHtml, quickFillHtml) {
   return `
     <label>Photo is a...
       <select name="photoMode" id="food-photo-mode">
@@ -1282,6 +1282,7 @@ function renderFoodPhotoAndMacroFields(source, nameFieldHtml) {
       <img src="${source.image}" alt="Current photo" class="edit-image-preview" />
       <label class="checkbox-row"><input type="checkbox" name="removeImage" /> Remove photo (kept from before this changed)</label>
     </div>` : ''}
+    ${quickFillHtml || ''}
     ${nameFieldHtml}
     <label>Meal (optional)
       <select name="meal">
@@ -1326,25 +1327,25 @@ function renderLogFoodModal() {
     <label>Food name (optional)
       <input type="text" name="name" maxlength="80" value="${escapeHtml(editEntry ? (editEntry.name || '') : '')}" placeholder="e.g. Greek yogurt" />
     </label>`;
-  return `
-  <form data-form="log-food-entry" ${editEntry ? `data-entry-id="${editEntry.id}"` : ''}>
-    <h2>${editEntry ? 'Edit food entry' : 'Log food'}</h2>
-    ${!editEntry ? `
+  const quickFillHtml = !editEntry ? `
     <label>Look up a common food (optional)
       <input type="text" id="food-common-lookup" list="common-foods-datalist" placeholder="e.g. Banana, Chicken Breast..." autocomplete="off" />
     </label>
     <datalist id="common-foods-datalist">
       ${COMMON_FOODS.slice().sort((a, b) => a.name.localeCompare(b.name)).map(f => `<option value="${escapeHtml(f.name)}"></option>`).join('')}
     </datalist>
-    <p class="field-hint">Fills in the name and macros below with typical reference values for that food — not a measurement of your exact portion or brand, so double-check and adjust if it's not a close match.</p>` : ''}
-    ${!editEntry && state.food.library.length ? `
+    <p class="field-hint">Fills in the name and macros below with typical reference values for that food — not a measurement of your exact portion or brand, so double-check and adjust if it's not a close match.</p>
+    ${state.food.library.length ? `
     <label>Quickly fill from library (optional)
       <select id="food-library-picker">
         <option value="">— Choose a saved food —</option>
         ${state.food.library.map(item => `<option value="${item.id}">${escapeHtml(item.name || 'Unnamed')}${item.servingSize ? ' — ' + escapeHtml(item.servingSize) : ''}</option>`).join('')}
       </select>
     </label>
-    <p class="field-hint">Fills in the fields below from something you've saved — still editable before saving. Date and time stay as set below.</p>` : ''}
+    <p class="field-hint">Fills in the fields below from something you've saved — still editable before saving. Date and time stay as set below.</p>` : ''}` : '';
+  return `
+  <form data-form="log-food-entry" ${editEntry ? `data-entry-id="${editEntry.id}"` : ''}>
+    <h2>${editEntry ? 'Edit food entry' : 'Log food'}</h2>
     <div class="form-row">
       <label>Date
         <input type="date" name="date" value="${editEntry ? editEntry.date : todayStr()}" max="${todayStr()}" required />
@@ -1353,7 +1354,7 @@ function renderLogFoodModal() {
         <input type="time" name="time" value="${editEntry && editEntry.time ? editEntry.time : nowTimeStr()}" />
       </label>
     </div>
-    ${renderFoodPhotoAndMacroFields(editEntry, nameField)}
+    ${renderFoodPhotoAndMacroFields(editEntry, nameField, quickFillHtml)}
     <label>Note (optional)
       <input type="text" name="note" maxlength="140" value="${escapeHtml(editEntry ? (editEntry.note || '') : '')}" />
     </label>
